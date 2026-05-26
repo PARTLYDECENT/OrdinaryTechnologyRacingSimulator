@@ -1,0 +1,1078 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full w-full m-0 p-0 overflow-hidden select-none">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SDF Truck Cinematic Workshop</title>
+    <!-- Tailwind CSS for high-end styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Three.js Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- OrbitControls for camera operations -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <style>
+        /* Smooth transitions for UI elements fading out */
+        .cinematic-ui {
+            transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .ui-hidden {
+            opacity: 0 !important;
+            pointer-events: none !important;
+            transform: scale(0.95) translateY(10px);
+        }
+        /* Custom scrollbar styling for slick workshop theme */
+        ::-webkit-scrollbar {
+            width: 4px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(15, 23, 42, 0.3);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(59, 130, 246, 0.5);
+            border-radius: 2px;
+        }
+        /* Custom sliders resembling synthesizer deck controls */
+        input[type="range"] {
+            -webkit-appearance: none;
+            appearance: none;
+            background: rgba(30, 41, 59, 0.8);
+            height: 4px;
+            border-radius: 2px;
+            outline: none;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #60a5fa;
+            cursor: pointer;
+            box-shadow: 0 0 8px rgba(96, 165, 250, 0.8);
+            transition: transform 0.1s ease;
+        }
+        input[type="range"]::-webkit-slider-thumb:hover {
+            transform: scale(1.3);
+            background: #93c5fd;
+        }
+    </style>
+</head>
+<body class="bg-[#04060a] text-slate-100 font-sans h-full w-full m-0 p-0 overflow-hidden relative">
+
+    <!-- 1. FULL VIEWPORT 3D CANVAS -->
+    <div id="canvas-container" class="absolute inset-0 w-full h-full z-0 cursor-grab active:cursor-grabbing"></div>
+
+    <!-- 2. SCREEN GLOW VIGNETTE OVERLAY -->
+    <div class="absolute inset-0 pointer-events-none z-10 bg-[radial-gradient(circle_at_center,rgba(0,0,0,0)_50%,rgba(0,0,0,0.6)_100%)]"></div>
+
+    <!-- 3. MAIN CINEMATIC FLOATING HUD (TOP BAR) -->
+    <header class="cinematic-ui absolute top-6 left-6 right-6 flex items-center justify-between gap-4 z-20 pointer-events-none">
+        <div class="flex items-center space-x-4 bg-slate-950/65 backdrop-blur-xl border border-slate-800/80 px-5 py-3 rounded-2xl shadow-2xl pointer-events-auto">
+            <div class="w-2.5 h-2.5 rounded-full bg-blue-500 animate-pulse shadow-[0_0_10px_#3b82f6]"></div>
+            <div>
+                <h1 class="text-sm font-extrabold tracking-wider bg-gradient-to-r from-blue-400 via-indigo-400 to-purple-400 bg-clip-text text-transparent">SDF TRUCK CINEMA</h1>
+                <p class="text-[10px] text-slate-400 font-medium tracking-tight">Pure Math Raymarch Engine • 100% Viewport Render</p>
+            </div>
+        </div>
+
+        <!-- Float presets & Controls Trigger -->
+        <div class="flex items-center space-x-3 pointer-events-auto">
+            <div class="hidden sm:flex bg-slate-950/65 backdrop-blur-xl border border-slate-800/80 p-1.5 rounded-xl space-x-1.5 shadow-2xl">
+                <button onclick="applyPreset('semi')" class="px-3 py-1 text-[11px] font-semibold rounded-lg bg-slate-900/60 hover:bg-blue-600 hover:text-white transition duration-200">Semi</button>
+                <button onclick="applyPreset('monster')" class="px-3 py-1 text-[11px] font-semibold rounded-lg bg-slate-900/60 hover:bg-blue-600 hover:text-white transition duration-200">Monster</button>
+                <button onclick="applyPreset('cyber')" class="px-3 py-1 text-[11px] font-semibold rounded-lg bg-slate-900/60 hover:bg-blue-600 hover:text-white transition duration-200">Cyber</button>
+                <button onclick="applyPreset('lowrider')" class="px-3 py-1 text-[11px] font-semibold rounded-lg bg-slate-900/60 hover:bg-blue-600 hover:text-white transition duration-200">Low Rider</button>
+            </div>
+
+            <!-- THE ULTIMATE IMMERSIVE TOGGLE -->
+            <button onclick="toggleImmersiveUI()" class="px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-xs rounded-xl shadow-[0_4px_12px_rgba(59,130,246,0.3)] hover:shadow-[0_4px_20px_rgba(59,130,246,0.6)] flex items-center space-x-2 transition duration-200">
+                <span id="btn-ui-icon">👁️</span>
+                <span id="btn-ui-text">Hide Controls [H]</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- 4. FLOATING PERFORMANCE HUD (BOTTOM LEFT) -->
+    <div class="cinematic-ui absolute bottom-6 left-6 pointer-events-none z-20 flex flex-col space-y-2">
+        <div class="bg-slate-950/65 backdrop-blur-xl px-4 py-2.5 rounded-xl border border-slate-800/80 flex items-center space-x-3 text-[11px] shadow-2xl pointer-events-auto">
+            <span class="font-mono text-emerald-400 font-bold" id="fps-display">-- FPS</span>
+            <span class="text-slate-700">|</span>
+            <span class="font-mono text-slate-400" id="resolution-display">--x--</span>
+            <span class="text-slate-700">|</span>
+            <span class="text-slate-400 font-semibold cursor-pointer hover:text-blue-400 flex items-center gap-1" onclick="toggleSpinCamera()">
+                <input type="checkbox" id="spin-camera" class="accent-blue-500 rounded cursor-pointer pointer-events-auto"> Spin
+            </span>
+        </div>
+    </div>
+
+    <!-- 5. FLOATING GLASS-CONTROL DECK (RIGHT HAND SIDE PANEL) -->
+    <div id="floating-panel" class="cinematic-ui absolute right-6 top-24 bottom-6 w-[340px] bg-slate-950/65 backdrop-blur-xl border border-slate-800/80 rounded-2xl flex flex-col shadow-[0_20px_50px_rgba(0,0,0,0.5)] z-20 overflow-hidden">
+        
+        <!-- Tabs Header -->
+        <div class="flex border-b border-slate-800/80 bg-slate-900/30 p-1 shrink-0">
+            <button id="tab-btn-sliders" onclick="switchTab('sliders')" class="flex-1 py-2 text-[10px] font-bold tracking-wider rounded-lg transition duration-200 bg-slate-900/70 text-blue-400 border border-slate-800">
+                TUNER
+            </button>
+            <button id="tab-btn-json" onclick="switchTab('json')" class="flex-1 py-2 text-[10px] font-bold tracking-wider rounded-lg transition duration-200 text-slate-400 hover:text-slate-200">
+                STATE ARRAY (JSON)
+            </button>
+        </div>
+
+        <!-- Scrollable Control Settings -->
+        <div class="flex-1 overflow-y-auto p-4 space-y-4">
+            
+            <!-- TUNER TAB -->
+            <div id="panel-sliders" class="space-y-4">
+                
+                <!-- CINEMATIC LIGHTING STYLES -->
+                <div class="bg-slate-900/40 p-3.5 rounded-xl border border-slate-800/50 space-y-2.5 shadow-inner">
+                    <span class="text-[10px] font-extrabold text-blue-400 uppercase tracking-widest block">🌆 Cinematic Atmosphere</span>
+                    <div class="grid grid-cols-2 gap-2">
+                        <button onclick="setAtmosphere('sunset')" class="py-1.5 px-2 text-[10px] bg-slate-800/50 hover:bg-orange-600 rounded-lg text-slate-300 font-semibold transition border border-slate-700/50">🌅 Sunset Neon</button>
+                        <button onclick="setAtmosphere('midnight')" class="py-1.5 px-2 text-[10px] bg-slate-800/50 hover:bg-slate-800 rounded-lg text-slate-300 font-semibold transition border border-slate-700/50">🌌 Arctic Ghost</button>
+                        <button onclick="setAtmosphere('neon')" class="py-1.5 px-2 text-[10px] bg-slate-800/50 hover:bg-indigo-900 rounded-lg text-slate-300 font-semibold transition border border-slate-700/50">👾 Tokyo Alley</button>
+                        <button onclick="setAtmosphere('toxic')" class="py-1.5 px-2 text-[10px] bg-slate-800/50 hover:bg-emerald-950 rounded-lg text-slate-300 font-semibold transition border border-slate-700/50">☣️ Acid Dunes</button>
+                    </div>
+                    <!-- Volumetric Headlight Option -->
+                    <div class="flex items-center justify-between pt-1.5 border-t border-slate-800/50">
+                        <span class="text-[10px] text-slate-400">Headlight Beam Projection</span>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" id="ctrl-light-beams" checked onchange="toggleBeams(this.checked)" class="sr-only peer">
+                            <div class="w-8 h-4 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-slate-400 after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-blue-500"></div>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- BODY CONFIG -->
+                <div class="bg-slate-900/40 p-3.5 rounded-xl border border-slate-800/50 space-y-2.5 shadow-inner">
+                    <div class="flex items-center justify-between border-b border-slate-800/50 pb-1.5">
+                        <span class="text-[10px] font-bold text-rose-400 tracking-wider flex items-center gap-1.5">
+                            <span class="w-1.5 h-1.5 rounded-full bg-rose-500 shadow-[0_0_6px_#f43f5e]"></span>CHASSIS BODY
+                        </span>
+                        <input type="color" id="ctrl-body-color" oninput="onSliderChange('body', 'color', this.value)" class="w-5 h-5 border-0 bg-transparent rounded cursor-pointer">
+                    </div>
+                    <div class="space-y-2 text-[10px]">
+                        <div>
+                            <div class="flex justify-between mb-0.5">
+                                <span class="text-slate-400">Length</span>
+                                <span id="val-body-width" class="font-mono font-semibold">2.4</span>
+                            </div>
+                            <input type="range" id="ctrl-body-width" min="1.0" max="4.0" step="0.1" value="2.4" oninput="onSliderChange('body', 'width', parseFloat(this.value))" class="w-full">
+                        </div>
+                        <div>
+                            <div class="flex justify-between mb-0.5">
+                                <span class="text-slate-400">Height</span>
+                                <span id="val-body-height" class="font-mono font-semibold">0.4</span>
+                            </div>
+                            <input type="range" id="ctrl-body-height" min="0.1" max="1.5" step="0.05" value="0.4" oninput="onSliderChange('body', 'height', parseFloat(this.value))" class="w-full">
+                        </div>
+                        <div>
+                            <div class="flex justify-between mb-0.5">
+                                <span class="text-slate-400">Width</span>
+                                <span id="val-body-depth" class="font-mono font-semibold">1.2</span>
+                            </div>
+                            <input type="range" id="ctrl-body-depth" min="0.5" max="2.5" step="0.05" value="1.2" oninput="onSliderChange('body', 'depth', parseFloat(this.value))" class="w-full">
+                        </div>
+                        <div>
+                            <div class="flex justify-between mb-0.5">
+                                <span class="text-slate-400">Roundness</span>
+                                <span id="val-body-roundness" class="font-mono font-semibold">0.08</span>
+                            </div>
+                            <input type="range" id="ctrl-body-roundness" min="0.0" max="0.4" step="0.01" value="0.08" oninput="onSliderChange('body', 'roundness', parseFloat(this.value))" class="w-full">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- CAB CONFIG -->
+                <div class="bg-slate-900/40 p-3.5 rounded-xl border border-slate-800/50 space-y-2.5 shadow-inner">
+                    <div class="flex items-center justify-between border-b border-slate-800/50 pb-1.5">
+                        <span class="text-[10px] font-bold text-blue-400 tracking-wider flex items-center gap-1.5">
+                            <span class="w-1.5 h-1.5 rounded-full bg-blue-500 shadow-[0_0_6px_#3b82f6]"></span>CABIN CAB
+                        </span>
+                        <input type="color" id="ctrl-cab-color" oninput="onSliderChange('cab', 'color', this.value)" class="w-5 h-5 border-0 bg-transparent rounded cursor-pointer">
+                    </div>
+                    <div class="space-y-2 text-[10px]">
+                        <div>
+                            <div class="flex justify-between mb-0.5">
+                                <span class="text-slate-400">Cab Length</span>
+                                <span id="val-cab-width" class="font-mono font-semibold">0.9</span>
+                            </div>
+                            <input type="range" id="ctrl-cab-width" min="0.4" max="2.5" step="0.05" value="0.9" oninput="onSliderChange('cab', 'width', parseFloat(this.value))" class="w-full">
+                        </div>
+                        <div>
+                            <div class="flex justify-between mb-0.5">
+                                <span class="text-slate-400">Cab Height</span>
+                                <span id="val-cab-height" class="font-mono font-semibold">0.8</span>
+                            </div>
+                            <input type="range" id="ctrl-cab-height" min="0.3" max="1.8" step="0.05" value="0.8" oninput="onSliderChange('cab', 'height', parseFloat(this.value))" class="w-full">
+                        </div>
+                        <div>
+                            <div class="flex justify-between mb-0.5">
+                                <span class="text-slate-400">Position X</span>
+                                <span id="val-cab-offsetX" class="font-mono font-semibold">0.70</span>
+                            </div>
+                            <input type="range" id="ctrl-cab-offsetX" min="-1.5" max="1.5" step="0.05" value="0.70" oninput="onSliderChange('cab', 'offsetX', parseFloat(this.value))" class="w-full">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- WHEELS CONFIG -->
+                <div class="bg-slate-900/40 p-3.5 rounded-xl border border-slate-800/50 space-y-2.5 shadow-inner">
+                    <div class="flex items-center justify-between border-b border-slate-800/50 pb-1.5">
+                        <span class="text-[10px] font-bold text-amber-400 tracking-wider flex items-center gap-1.5">
+                            <span class="w-1.5 h-1.5 rounded-full bg-amber-500 shadow-[0_0_6px_#f59e0b]"></span>RUGGED WHEELS
+                        </span>
+                        <input type="color" id="ctrl-wheels-color" oninput="onSliderChange('wheels', 'color', this.value)" class="w-5 h-5 border-0 bg-transparent rounded cursor-pointer">
+                    </div>
+                    <div class="space-y-2 text-[10px]">
+                        <div>
+                            <div class="flex justify-between mb-0.5">
+                                <span class="text-slate-400">Wheel Radius</span>
+                                <span id="val-wheels-radius" class="font-mono font-semibold">0.42</span>
+                            </div>
+                            <input type="range" id="ctrl-wheels-radius" min="0.15" max="0.9" step="0.02" value="0.42" oninput="onSliderChange('wheels', 'radius', parseFloat(this.value))" class="w-full">
+                        </div>
+                        <div>
+                            <div class="flex justify-between mb-0.5">
+                                <span class="text-slate-400">Wheelbase (Front/Back)</span>
+                                <span id="val-wheels-wheelbase" class="font-mono font-semibold">0.85</span>
+                            </div>
+                            <input type="range" id="ctrl-wheels-wheelbase" min="0.4" max="2.5" step="0.05" value="0.85" oninput="onSliderChange('wheels', 'wheelbase', parseFloat(this.value))" class="w-full">
+                        </div>
+                        <div>
+                            <div class="flex justify-between mb-0.5">
+                                <span class="text-slate-400">Track Width (Lateral)</span>
+                                <span id="val-wheels-trackWidth" class="font-mono font-semibold">0.55</span>
+                            </div>
+                            <input type="range" id="ctrl-wheels-trackWidth" min="0.3" max="1.8" step="0.05" value="0.55" oninput="onSliderChange('wheels', 'trackWidth', parseFloat(this.value))" class="w-full">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- CAMERA & RESOLUTION TUNING -->
+                <div class="bg-slate-900/40 p-3.5 rounded-xl border border-slate-800/50 space-y-2.5 shadow-inner">
+                    <span class="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest block">🔧 Renderer Settings</span>
+                    <div class="flex justify-between items-center text-[10px]">
+                        <span class="text-slate-400">Render Resolution</span>
+                        <select id="quality-select" onchange="changeQuality(this.value)" class="bg-slate-950 border border-slate-800 text-slate-300 rounded px-1.5 py-0.5 outline-none pointer-events-auto">
+                            <option value="0.5">0.5x Mode</option>
+                            <option value="0.75" selected>0.75x Mode</option>
+                            <option value="1.0">1.0x Native</option>
+                            <option value="1.2">1.2x Extreme</option>
+                        </select>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- JSON CODE TAB -->
+            <div id="panel-json" class="hidden h-full flex flex-col space-y-3">
+                <div class="flex justify-between items-center">
+                    <span class="text-[10px] text-slate-400 font-semibold tracking-wider">STATE JSON BINDING:</span>
+                    <div id="json-badge" class="px-2 py-0.5 text-[9px] font-bold rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Synced</div>
+                </div>
+                <textarea id="json-textarea" onkeyup="onJsonTextareaChange()" class="w-full h-[280px] bg-slate-950/80 p-3 rounded-xl border border-slate-800/80 font-mono text-[10px] text-blue-300 focus:outline-none focus:border-blue-500 resize-none select-all" spellcheck="false"></textarea>
+                
+                <div class="flex gap-2 pt-1.5">
+                    <button onclick="copyState()" class="flex-1 py-1.5 bg-slate-800/80 hover:bg-slate-700 rounded-lg text-slate-300 text-[10px] font-bold transition">Copy State</button>
+                    <button onclick="resetToDefault()" class="flex-1 py-1.5 bg-red-600/10 hover:bg-red-600/20 text-red-400 text-[10px] font-bold transition">Reset State</button>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Footer containing the Hide button tip -->
+        <div class="p-3 bg-slate-950/40 border-t border-slate-800/50 text-[9px] text-slate-500 text-center">
+            Tip: Press <kbd class="px-1 py-0.5 bg-slate-900 border border-slate-800 rounded font-mono text-slate-400">H</kbd> to hide all interfaces instantly.
+        </div>
+    </div>
+
+    <!-- Shader Definition Block -->
+    <script>
+        const vertexShader = `
+            varying vec2 v_uv;
+            void main() {
+                v_uv = uv * 2.0 - 1.0;
+                gl_Position = vec4(position, 1.0);
+            }
+        `;
+
+        // Premium Raymarched SDF Fragment Shader with Projected Volumetric Beam Lights
+        const fragmentShader = `
+            uniform mat4 u_cameraWorldMatrix;
+            uniform mat4 u_projectionMatrixInverse;
+            varying vec2 v_uv;
+
+            // Chassis Body Uniforms
+            uniform vec3 u_bodyDims;
+            uniform float u_bodyRoundness;
+            uniform vec3 u_bodyOffset;
+            uniform vec3 u_bodyColor;
+
+            // Cabin Cab Uniforms
+            uniform vec3 u_cabDims;
+            uniform float u_cabRoundness;
+            uniform vec3 u_cabOffset;
+            uniform vec3 u_cabColor;
+
+            // Wheels Uniforms
+            uniform float u_wheelRadius;
+            uniform float u_wheelWidth;
+            uniform float u_wheelbase;
+            uniform float u_trackWidth;
+            uniform vec3 u_wheelOffset;
+            uniform vec3 u_wheelColor;
+
+            // Atmosphere / Lighting Profiles
+            uniform vec3 u_sunDir;
+            uniform vec3 u_sunColor;
+            uniform vec3 u_skyColor;
+            uniform vec3 u_bgColor;
+            uniform int u_lightBeams; // Toggle headlight projection cone
+
+            struct MapResult {
+                float dist;
+                int id; // 1: Body, 2: Cab, 3: Tires, 4: Ground, 5: Chrome hubs, 6: Headlights, 7: Taillights, 8: Exhaust
+                vec3 color;
+            };
+
+            // SDF Helpers
+            float sdRoundBox(vec3 p, vec3 b, float r) {
+                vec3 q = abs(p) - b + r;
+                return length(max(q, 0.0)) + min(max(q.x, max(q.y, q.z)), 0.0) - r;
+            }
+
+            float sdCylinderZ(vec3 p, float h, float r) {
+                vec2 d = abs(vec2(length(p.xy), p.z)) - vec2(r, h);
+                return min(max(d.x, d.y), 0.0) + length(max(d, 0.0));
+            }
+
+            float sdCylinderY(vec3 p, float h, float r) {
+                vec2 d = abs(vec2(length(p.xz), p.y)) - vec2(r, h);
+                return min(max(d.x, d.y), 0.0) + length(max(d, 0.0));
+            }
+
+            // Map entire SDF Scene
+            MapResult map(vec3 p) {
+                MapResult res;
+                res.dist = 1e10;
+                res.id = 0;
+                res.color = vec3(1.0);
+
+                // 1. GROUND PLANE
+                float dGround = p.y + 0.95;
+                if (dGround < res.dist) {
+                    res.dist = dGround;
+                    res.id = 4;
+                    // Stylish ground checker alignment grid
+                    float grid = step(0.98, max(fract(p.x * 1.5), fract(p.z * 1.5)));
+                    res.color = mix(u_bgColor * 0.4, u_sunColor * 0.15, grid);
+                }
+
+                // 2. CHASSIS BODY
+                vec3 pBody = p - u_bodyOffset;
+                float dBody = sdRoundBox(pBody, u_bodyDims * 0.5, u_bodyRoundness);
+
+                // Rear Flatbed Cargo Bed cutout
+                vec3 bedSize = vec3(u_bodyDims.x * 0.28, u_bodyDims.y * 0.45, u_bodyDims.z * 0.42);
+                vec3 bedOffset = vec3(-u_bodyDims.x * 0.2, u_bodyDims.y * 0.2, 0.0);
+                float dBed = sdRoundBox(pBody - bedOffset, bedSize, 0.02);
+
+                // Wheel Well Carvings
+                vec3 pWellSym = vec3(abs(p - u_bodyOffset).x - u_wheelbase, p.y - u_wheelOffset.y - 0.05, abs(p - u_bodyOffset).z - u_trackWidth);
+                float dWheelWell = sdCylinderZ(pWellSym, u_wheelWidth * 0.72, u_wheelRadius * 1.25);
+
+                float dBodyCarved = max(dBody, -dBed);
+                dBodyCarved = max(dBodyCarved, -dWheelWell);
+
+                if (dBodyCarved < res.dist) {
+                    res.dist = dBodyCarved;
+                    res.id = 1;
+                    res.color = u_bodyColor;
+                }
+
+                // 3. CABIN CAB
+                vec3 pCab = p - u_cabOffset;
+                float dCab = sdRoundBox(pCab, u_cabDims * 0.5, u_cabRoundness);
+                if (dCab < res.dist) {
+                    res.dist = dCab;
+                    res.id = 2;
+                    res.color = u_cabColor;
+                }
+
+                // 4. CHROME EXHAUST SMOKESTACK
+                vec3 pExhaust = p - (u_cabOffset - vec3(u_cabDims.x * 0.5 + 0.08, 0.0, -u_cabDims.z * 0.35));
+                float dExhaust = sdCylinderY(pExhaust - vec3(0.0, u_cabDims.y * 0.35, 0.0), u_cabDims.y * 0.55, 0.035);
+                if (dExhaust < res.dist) {
+                    res.dist = dExhaust;
+                    res.id = 8;
+                    res.color = vec3(0.75, 0.77, 0.8);
+                }
+
+                // 5. FRONT EMBELLISHING HEADLIGHTS
+                vec3 pLightSym = vec3(pCab.x - u_cabDims.x * 0.501, pCab.y - u_cabDims.y * 0.18, abs(pCab.z) - u_cabDims.z * 0.35);
+                float dLights = length(pLightSym) - 0.08;
+                if (dLights < res.dist) {
+                    res.dist = dLights;
+                    res.id = 6;
+                    res.color = vec3(1.0, 0.96, 0.85);
+                }
+
+                // 6. BACK TAILLIGHTS
+                vec3 pTailLightSym = vec3(pBody.x + u_bodyDims.x * 0.501, pBody.y, abs(pBody.z) - u_bodyDims.z * 0.38);
+                float dTailLights = sdRoundBox(pTailLightSym, vec3(0.02, 0.04, 0.08), 0.01);
+                if (dTailLights < res.dist) {
+                    res.dist = dTailLights;
+                    res.id = 7;
+                    res.color = vec3(0.95, 0.08, 0.08);
+                }
+
+                // 7. SYMMETRIC RUGGED TIRES & HUBCAPS
+                vec3 pWheel = p - u_wheelOffset;
+                vec3 pWheelSym = vec3(abs(pWheel.x) - u_wheelbase, pWheel.y, abs(pWheel.z) - u_trackWidth);
+                
+                float dTires = sdCylinderZ(pWheelSym, u_wheelWidth * 0.5, u_wheelRadius);
+                float dHubs = sdCylinderZ(pWheelSym, u_wheelWidth * 0.55, u_wheelRadius * 0.45);
+                float dWheelGroup = min(dTires, dHubs);
+
+                if (dWheelGroup < res.dist) {
+                    res.dist = dWheelGroup;
+                    if (dHubs < dTires) {
+                        res.id = 5;
+                        res.color = vec3(0.8, 0.83, 0.86);
+                    } else {
+                        res.id = 3;
+                        res.color = u_wheelColor;
+                    }
+                }
+
+                return res;
+            }
+
+            // Normal Vector Estimation (Central Difference Method)
+            vec3 calcNormal(vec3 p) {
+                const float h = 0.0005;
+                const vec2 k = vec2(1.0, -1.0);
+                return normalize(
+                    k.xyy * map(p + k.xyy * h).dist +
+                    k.yyx * map(p + k.yyx * h).dist +
+                    k.yxy * map(p + k.yxy * h).dist +
+                    k.xxx * map(p + k.xxx * h).dist
+                );
+            }
+
+            // Soft shadow rendering on SDF scenes
+            float calcShadow(vec3 ro, vec3 rd, float mint, float maxt, float k) {
+                float res = 1.0;
+                float t = mint;
+                for (int i = 0; i < 28; i++) {
+                    float h = map(ro + rd * t).dist;
+                    if (h < 0.001) return 0.0;
+                    res = min(res, k * h / t);
+                    t += clamp(h, 0.015, 0.15);
+                    if (t > maxt) break;
+                }
+                return clamp(res, 0.0, 1.0);
+            }
+
+            // Ambient Occlusion Estimation
+            float calcAO(vec3 p, vec3 n) {
+                float occ = 0.0;
+                float sca = 1.0;
+                for (int i = 0; i < 5; i++) {
+                    float h = 0.01 + 0.11 * float(i) / 4.0;
+                    float d = map(p + n * h).dist;
+                    occ += (h - d) * sca;
+                    sca *= 0.95;
+                }
+                return clamp(1.0 - 3.2 * occ, 0.0, 1.0);
+            }
+
+            void main() {
+                // Ray direction reconstruction
+                vec4 ndc = vec4(v_uv, -1.0, 1.0);
+                vec4 target = u_projectionMatrixInverse * ndc;
+                vec3 rd = (u_cameraWorldMatrix * vec4(normalize(target.xyz / target.w), 0.0)).xyz;
+                vec3 ro = (u_cameraWorldMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
+
+                // Raymarch execution loop
+                float t = 0.1;
+                float tMax = 18.0;
+                MapResult hit;
+                hit.dist = -1.0;
+                bool isHit = false;
+
+                for (int i = 0; i < 90; i++) {
+                    vec3 p = ro + rd * t;
+                    MapResult m = map(p);
+                    if (m.dist < 0.001) {
+                        hit = m;
+                        hit.dist = t;
+                        isHit = true;
+                        break;
+                    }
+                    t += m.dist;
+                    if (t > tMax) break;
+                }
+
+                vec3 col = u_bgColor;
+
+                // Volumetric Headlight Cone calculation (Projected light forward)
+                float coneEffect = 0.0;
+                if (u_lightBeams == 1) {
+                    // Position of the front lights
+                    vec3 leftLightPos = u_cabOffset + vec3(u_cabDims.x * 0.5, u_cabDims.y * 0.18, u_cabDims.z * 0.35);
+                    vec3 rightLightPos = u_cabOffset + vec3(u_cabDims.x * 0.5, u_cabDims.y * 0.18, -u_cabDims.z * 0.35);
+
+                    // Cast cones forward (Positive X direction)
+                    vec3 pLocalL = ro - leftLightPos;
+                    vec3 pLocalR = ro - rightLightPos;
+                    
+                    for (int s = 0; s < 12; s++) {
+                        float st = tMax * (float(s) / 12.0);
+                        if (isHit && st > hit.dist) break;
+                        vec3 samplePt = ro + rd * st;
+                        
+                        // Vector from lights to sample point
+                        vec3 toPtL = samplePt - leftLightPos;
+                        vec3 toPtR = samplePt - rightLightPos;
+
+                        float pDistL = dot(toPtL, vec3(1.0, 0.0, 0.0));
+                        float pDistR = dot(toPtR, vec3(1.0, 0.0, 0.0));
+
+                        if (pDistL > 0.0) {
+                            float radiusL = pDistL * 0.45;
+                            float lateralL = length(toPtL - vec3(pDistL, 0.0, 0.0));
+                            coneEffect += (1.0 - smoothstep(0.0, radiusL, lateralL)) * exp(-pDistL * 0.4) * 0.08;
+                        }
+                        if (pDistR > 0.0) {
+                            float radiusR = pDistR * 0.45;
+                            float lateralR = length(toPtR - vec3(pDistR, 0.0, 0.0));
+                            coneEffect += (1.0 - smoothstep(0.0, radiusR, lateralR)) * exp(-pDistR * 0.4) * 0.08;
+                        }
+                    }
+                }
+
+                if (isHit) {
+                    vec3 p = ro + rd * hit.dist;
+                    vec3 n = calcNormal(p);
+                    vec3 materialColor = hit.color;
+
+                    // Light interactions
+                    float diff = clamp(dot(n, u_sunDir), 0.0, 1.0);
+                    float skyDiff = clamp(0.5 + 0.5 * dot(n, vec3(0.0, 1.0, 0.0)), 0.0, 1.0);
+                    
+                    float shadow = calcShadow(p + n * 0.015, u_sunDir, 0.02, 4.0, 14.0);
+                    float ao = calcAO(p, n);
+
+                    vec3 lighting = diff * u_sunColor * shadow;
+                    lighting += skyDiff * u_skyColor * ao * 0.4;
+
+                    // Bounce light from the dynamic ground plane
+                    float bounceDiff = clamp(0.5 + 0.5 * dot(n, vec3(0.0, -1.0, 0.0)), 0.0, 1.0);
+                    lighting += bounceDiff * u_bgColor * ao * 0.3;
+
+                    col = materialColor * lighting;
+
+                    // Shiny material specular adjustments
+                    if (hit.id == 1 || hit.id == 2) {
+                        vec3 ref = reflect(rd, n);
+                        float spec = pow(clamp(dot(ref, u_sunDir), 0.0, 1.0), 20.0);
+                        col += spec * u_sunColor * 0.35 * shadow;
+                    } else if (hit.id == 5 || hit.id == 8) { // Polished metal hubs and pipes
+                        vec3 ref = reflect(rd, n);
+                        float spec = pow(clamp(dot(ref, u_sunDir), 0.0, 1.0), 32.0);
+                        col += spec * vec3(1.0) * 0.8 * shadow;
+                    }
+
+                    // Self emissive headlight / taillight mesh glow
+                    if (hit.id == 6) col = hit.color * 2.5;
+                    if (hit.id == 7) col = hit.color * 2.0;
+
+                    // Fog decay
+                    col = mix(col, u_bgColor, 1.0 - exp(-0.015 * hit.dist * hit.dist));
+                } else {
+                    // Horizon background gradient
+                    float f = clamp(0.0, 1.0, rd.y + 0.15);
+                    col = mix(u_bgColor, u_bgColor * 1.8 + u_sunColor * 0.08, f);
+                }
+
+                // Add projected beam volumetric atmosphere overlay
+                col += vec3(0.95, 0.96, 1.0) * coneEffect;
+
+                // Gamma tuning
+                col = pow(col, vec3(0.4545));
+
+                gl_FragColor = vec4(col, 1.0);
+            }
+        `;
+    </script>
+
+    <!-- State & Shader Handler Engine Script -->
+    <script>
+        let scene, camera, renderer, material, mesh, controls;
+        let uniforms = {};
+
+        // Central State Array for absolute tuning
+        let truckState = [
+            {
+                part: "body",
+                width: 2.4,
+                height: 0.4,
+                depth: 1.2,
+                roundness: 0.08,
+                offsetY: -0.1,
+                color: "#1e3a8a" // Midnight Blue
+            },
+            {
+                part: "cab",
+                width: 0.9,
+                height: 0.8,
+                depth: 1.1,
+                roundness: 0.12,
+                offsetX: 0.7,
+                offsetY: 0.45,
+                color: "#2563eb" // Bright Royal Blue
+            },
+            {
+                part: "wheels",
+                radius: 0.42,
+                width: 0.26,
+                wheelbase: 0.85,
+                trackWidth: 0.55,
+                offsetY: -0.4,
+                color: "#0f172a" // Charcoal Gray
+            }
+        ];
+
+        // Atmosphere Profiles Configuration Matrix
+        const ATMOSPHERES = {
+            sunset: {
+                sunDir: new THREE.Vector3(2.0, 1.5, 1.5).normalize(),
+                sunColor: new THREE.Color("#f97316"), // Neon Orange Sun
+                skyColor: new THREE.Color("#4c1d95"), // Purple haze ambient
+                bgColor: new THREE.Color("#0f071d")  // Deep purple dark ground
+            },
+            midnight: {
+                sunDir: new THREE.Vector3(-1.0, 3.0, -1.0).normalize(),
+                sunColor: new THREE.Color("#38bdf8"), // Cool Cyan Sun
+                skyColor: new THREE.Color("#0f172a"), // Dark Slate Blue
+                bgColor: new THREE.Color("#030712")  // Pure obsidian black space
+            },
+            neon: {
+                sunDir: new THREE.Vector3(1.5, 2.5, 2.0).normalize(),
+                sunColor: new THREE.Color("#ec4899"), // Hot Pink Sun
+                skyColor: new THREE.Color("#1e1b4b"), // Deep indigo
+                bgColor: new THREE.Color("#050515")  // Techno black
+            },
+            toxic: {
+                sunDir: new THREE.Vector3(1.2, 1.8, 1.0).normalize(),
+                sunColor: new THREE.Color("#a3e635"), // Toxic Yellow-Green
+                skyColor: new THREE.Color("#022c22"), // Deep emerald haze
+                bgColor: new THREE.Color("#02110a")  // Corroded dark green
+            }
+        };
+
+        let currentAtmosphere = "sunset";
+        let engineSettings = {
+            quality: 0.75,
+            lightBeams: true
+        };
+
+        const PRESETS = {
+            semi: [
+                { part: "body", width: 2.8, height: 0.35, depth: 1.1, roundness: 0.04, offsetY: -0.1, color: "#991b1b" },
+                { part: "cab", width: 1.0, height: 1.1, depth: 1.0, roundness: 0.06, offsetX: 0.8, offsetY: 0.6, color: "#ef4444" },
+                { part: "wheels", radius: 0.44, width: 0.22, wheelbase: 1.0, trackWidth: 0.52, offsetY: -0.38, color: "#1f2937" }
+            ],
+            monster: [
+                { part: "body", width: 1.5, height: 0.3, depth: 0.9, roundness: 0.15, offsetY: 0.15, color: "#166534" },
+                { part: "cab", width: 0.85, height: 0.65, depth: 0.8, roundness: 0.12, offsetX: 0.0, offsetY: 0.6, color: "#22c55e" },
+                { part: "wheels", radius: 0.75, width: 0.55, wheelbase: 0.9, trackWidth: 0.85, offsetY: -0.25, color: "#0f172a" }
+            ],
+            cyber: [
+                { part: "body", width: 2.6, height: 0.45, depth: 1.25, roundness: 0.0, offsetY: -0.05, color: "#4b5563" },
+                { part: "cab", width: 1.25, height: 0.55, depth: 1.2, roundness: 0.0, offsetX: 0.2, offsetY: 0.42, color: "#374151" },
+                { part: "wheels", radius: 0.46, width: 0.3, wheelbase: 0.95, trackWidth: 0.62, offsetY: -0.35, color: "#111827" }
+            ],
+            lowrider: [
+                { part: "body", width: 2.9, height: 0.26, depth: 1.25, roundness: 0.08, offsetY: -0.3, color: "#6b21a8" },
+                { part: "cab", width: 1.1, height: 0.45, depth: 1.15, roundness: 0.14, offsetX: 0.1, offsetY: 0.08, color: "#a855f7" },
+                { part: "wheels", radius: 0.28, width: 0.34, wheelbase: 1.15, trackWidth: 0.65, offsetY: -0.38, color: "#1e293b" }
+            ]
+        };
+
+        // Initialize cinematic raymarch scene
+        function initWebGL() {
+            const container = document.getElementById('canvas-container');
+            const width = container.clientWidth;
+            const height = container.clientHeight;
+
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(40, width / height, 0.1, 100);
+            camera.position.set(4.5, 1.8, 4.5);
+
+            renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: "high-performance" });
+            renderer.setSize(width, height);
+            renderer.setPixelRatio(window.devicePixelRatio * engineSettings.quality);
+            container.appendChild(renderer.domElement);
+
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.06;
+            controls.maxPolarAngle = Math.PI / 2 + 0.01;
+            controls.minDistance = 2.0;
+            controls.maxDistance = 10.0;
+            controls.target.set(0.1, 0.1, 0.0);
+
+            // Establish unified parameters inside Uniforms object
+            uniforms = {
+                u_cameraWorldMatrix: { value: new THREE.Matrix4() },
+                u_projectionMatrixInverse: { value: new THREE.Matrix4() },
+                u_bodyDims: { value: new THREE.Vector3() },
+                u_bodyRoundness: { value: 0.08 },
+                u_bodyOffset: { value: new THREE.Vector3() },
+                u_bodyColor: { value: new THREE.Color() },
+                u_cabDims: { value: new THREE.Vector3() },
+                u_cabRoundness: { value: 0.12 },
+                u_cabOffset: { value: new THREE.Vector3() },
+                u_cabColor: { value: new THREE.Color() },
+                u_wheelRadius: { value: 0.42 },
+                u_wheelWidth: { value: 0.26 },
+                u_wheelbase: { value: 0.85 },
+                u_trackWidth: { value: 0.55 },
+                u_wheelOffset: { value: new THREE.Vector3() },
+                u_wheelColor: { value: new THREE.Color() },
+                u_sunDir: { value: new THREE.Vector3() },
+                u_sunColor: { value: new THREE.Color() },
+                u_skyColor: { value: new THREE.Color() },
+                u_bgColor: { value: new THREE.Color() },
+                u_lightBeams: { value: 1 }
+            };
+
+            const geometry = new THREE.PlaneGeometry(2, 2);
+            material = new THREE.ShaderMaterial({
+                vertexShader: vertexShader,
+                fragmentShader: fragmentShader,
+                uniforms: uniforms,
+                depthWrite: false,
+                depthTest: false
+            });
+
+            mesh = new THREE.Mesh(geometry, material);
+            scene.add(mesh);
+
+            window.addEventListener('resize', onWindowResize);
+            window.addEventListener('keydown', onKeyDown);
+
+            // Set default aesthetic environments
+            setAtmosphere(currentAtmosphere);
+            updateFromState();
+            animate(0);
+        }
+
+        // Handle camera spin state
+        function toggleSpinCamera() {
+            const checked = document.getElementById('spin-camera').checked;
+            controls.autoRotate = checked;
+            controls.autoRotateSpeed = 2.5;
+        }
+
+        // Cinematic Scene Animation loop
+        let lastTime = 0;
+        let frameCount = 0;
+        function animate(time) {
+            requestAnimationFrame(animate);
+
+            controls.update();
+
+            camera.updateMatrixWorld();
+            uniforms.u_cameraWorldMatrix.value.copy(camera.matrixWorld);
+            uniforms.u_projectionMatrixInverse.value.copy(camera.projectionMatrixInverse);
+
+            renderer.render(scene, camera);
+
+            // Frame diagnostic tracker
+            frameCount++;
+            if (time >= lastTime + 1000) {
+                const fps = Math.round((frameCount * 1000) / (time - lastTime));
+                document.getElementById('fps-display').innerText = `${fps} FPS`;
+                frameCount = 0;
+                lastTime = time;
+            }
+        }
+
+        // Load environmental variables dynamically into shader
+        function setAtmosphere(presetKey) {
+            currentAtmosphere = presetKey;
+            const config = ATMOSPHERES[presetKey];
+            if (config) {
+                uniforms.u_sunDir.value.copy(config.sunDir);
+                uniforms.u_sunColor.value.copy(config.sunColor);
+                uniforms.u_skyColor.value.copy(config.skyColor);
+                uniforms.u_bgColor.value.copy(config.bgColor);
+            }
+        }
+
+        // Volumetric beam switches
+        function toggleBeams(checked) {
+            engineSettings.lightBeams = checked;
+            uniforms.u_lightBeams.value = checked ? 1 : 0;
+        }
+
+        // Immersive UI toggle state
+        let uiVisible = true;
+        function toggleImmersiveUI() {
+            uiVisible = !uiVisible;
+            const elements = document.querySelectorAll('.cinematic-ui');
+            const btnIcon = document.getElementById('btn-ui-icon');
+            const btnText = document.getElementById('btn-ui-text');
+
+            elements.forEach(el => {
+                if (el.id !== 'toggle-trigger-btn') {
+                    if (uiVisible) {
+                        el.classList.remove('ui-hidden');
+                    } else {
+                        el.classList.add('ui-hidden');
+                    }
+                }
+            });
+
+            // Keep the toggle control button itself beautifully responsive
+            if (uiVisible) {
+                btnIcon.innerText = "👁️";
+                btnText.innerText = "Hide Controls [H]";
+            } else {
+                btnIcon.innerText = "✨";
+                btnText.innerText = "Show UI Panel [H]";
+            }
+        }
+
+        function onKeyDown(event) {
+            if (event.key === 'h' || event.key === 'H') {
+                // Ignore keypresses if they occur within textareas to allow correct typography
+                if (document.activeElement.tagName !== 'TEXTAREA' && document.activeElement.tagName !== 'INPUT') {
+                    toggleImmersiveUI();
+                }
+            }
+        }
+
+        // Apply state variables straight to shader uniforms & control sliders
+        function updateFromState() {
+            const body = truckState.find(p => p.part === "body");
+            const cab = truckState.find(p => p.part === "cab");
+            const wheels = truckState.find(p => p.part === "wheels");
+
+            if (!body || !cab || !wheels) return;
+
+            // 1. Pack Body Uniforms
+            uniforms.u_bodyDims.value.set(body.width, body.height, body.depth);
+            uniforms.u_bodyRoundness.value = body.roundness;
+            uniforms.u_bodyOffset.value.set(0.0, body.offsetY, 0.0);
+            uniforms.u_bodyColor.value.set(body.color);
+
+            // 2. Pack Cab Uniforms
+            uniforms.u_cabDims.value.set(cab.width, cab.height, cab.depth);
+            uniforms.u_cabRoundness.value = cab.roundness;
+            uniforms.u_cabOffset.value.set(cab.offsetX, cab.offsetY, 0.0);
+            uniforms.u_cabColor.value.set(cab.color);
+
+            // 3. Pack Wheels Uniforms
+            uniforms.u_wheelRadius.value = wheels.radius;
+            uniforms.u_wheelWidth.value = wheels.width;
+            uniforms.u_wheelbase.value = wheels.wheelbase;
+            uniforms.u_trackWidth.value = wheels.trackWidth;
+            uniforms.u_wheelOffset.value.set(0.0, wheels.offsetY, 0.0);
+            uniforms.u_wheelColor.value.set(wheels.color);
+
+            // Update user input views
+            updateSlidersUI(body, cab, wheels);
+            updateJsonTextarea();
+        }
+
+        function updateSlidersUI(body, cab, wheels) {
+            document.getElementById('ctrl-body-width').value = body.width;
+            document.getElementById('val-body-width').innerText = body.width.toFixed(2);
+            document.getElementById('ctrl-body-height').value = body.height;
+            document.getElementById('val-body-height').innerText = body.height.toFixed(2);
+            document.getElementById('ctrl-body-depth').value = body.depth;
+            document.getElementById('val-body-depth').innerText = body.depth.toFixed(2);
+            document.getElementById('ctrl-body-roundness').value = body.roundness;
+            document.getElementById('val-body-roundness').innerText = body.roundness.toFixed(2);
+            document.getElementById('ctrl-body-color').value = body.color;
+
+            document.getElementById('ctrl-cab-width').value = cab.width;
+            document.getElementById('val-cab-width').innerText = cab.width.toFixed(2);
+            document.getElementById('ctrl-cab-height').value = cab.height;
+            document.getElementById('val-cab-height').innerText = cab.height.toFixed(2);
+            document.getElementById('ctrl-cab-offsetX').value = cab.offsetX;
+            document.getElementById('val-cab-offsetX').innerText = cab.offsetX.toFixed(2);
+            document.getElementById('ctrl-cab-color').value = cab.color;
+
+            document.getElementById('ctrl-wheels-radius').value = wheels.radius;
+            document.getElementById('val-wheels-radius').innerText = wheels.radius.toFixed(2);
+            document.getElementById('ctrl-wheels-wheelbase').value = wheels.wheelbase;
+            document.getElementById('val-wheels-wheelbase').innerText = wheels.wheelbase.toFixed(2);
+            document.getElementById('ctrl-wheels-trackWidth').value = wheels.trackWidth;
+            document.getElementById('val-wheels-trackWidth').innerText = wheels.trackWidth.toFixed(2);
+            document.getElementById('ctrl-wheels-color').value = wheels.color;
+        }
+
+        function updateJsonTextarea() {
+            const textarea = document.getElementById('json-textarea');
+            textarea.value = JSON.stringify(truckState, null, 2);
+            
+            const badge = document.getElementById('json-badge');
+            badge.className = "px-2 py-0.5 text-[9px] font-bold rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20";
+            badge.innerHTML = "Synced";
+        }
+
+        function onSliderChange(partName, property, value) {
+            const part = truckState.find(p => p.part === partName);
+            if (part) {
+                part[property] = value;
+                
+                const indicator = document.getElementById(`val-${partName}-${property}`);
+                if (indicator && typeof value === 'number') {
+                    indicator.innerText = value.toFixed(2);
+                }
+
+                // Push specific components straight into corresponding uniforms
+                if (partName === 'body') {
+                    if (property === 'width' || property === 'height' || property === 'depth') {
+                        uniforms.u_bodyDims.value.set(part.width, part.height, part.depth);
+                    } else if (property === 'roundness') {
+                        uniforms.u_bodyRoundness.value = part.roundness;
+                    } else if (property === 'color') {
+                        uniforms.u_bodyColor.value.set(part.color);
+                    }
+                } else if (partName === 'cab') {
+                    if (property === 'width' || property === 'height' || property === 'depth') {
+                        uniforms.u_cabDims.value.set(part.width, part.height, part.depth);
+                    } else if (property === 'roundness') {
+                        uniforms.u_cabRoundness.value = part.roundness;
+                    } else if (property === 'offsetX') {
+                        uniforms.u_cabOffset.value.set(part.offsetX, part.offsetY, 0.0);
+                    } else if (property === 'color') {
+                        uniforms.u_cabColor.value.set(part.color);
+                    }
+                } else if (partName === 'wheels') {
+                    if (property === 'radius') {
+                        uniforms.u_wheelRadius.value = part.radius;
+                    } else if (property === 'wheelbase') {
+                        uniforms.u_wheelbase.value = part.wheelbase;
+                    } else if (property === 'trackWidth') {
+                        uniforms.u_trackWidth.value = part.trackWidth;
+                    } else if (property === 'color') {
+                        uniforms.u_wheelColor.value.set(part.color);
+                    }
+                }
+
+                document.getElementById('json-textarea').value = JSON.stringify(truckState, null, 2);
+            }
+        }
+
+        // Live JSON input handler
+        function onJsonTextareaChange() {
+            const text = document.getElementById('json-textarea').value;
+            const badge = document.getElementById('json-badge');
+            
+            try {
+                const parsed = JSON.parse(text);
+                if (Array.isArray(parsed) && parsed.length === 3) {
+                    const body = parsed.find(p => p.part === "body");
+                    const cab = parsed.find(p => p.part === "cab");
+                    const wheels = parsed.find(p => p.part === "wheels");
+
+                    if (body && cab && wheels) {
+                        truckState = parsed;
+                        updateFromState();
+                        badge.className = "px-2 py-0.5 text-[9px] font-bold rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20";
+                        badge.innerHTML = "Validated";
+                        return;
+                    }
+                }
+                throw new Error();
+            } catch (err) {
+                badge.className = "px-2 py-0.5 text-[9px] font-bold rounded bg-rose-500/10 text-rose-400 border border-rose-500/20";
+                badge.innerHTML = "Error";
+            }
+        }
+
+        function applyPreset(presetName) {
+            if (PRESETS[presetName]) {
+                truckState = JSON.parse(JSON.stringify(PRESETS[presetName]));
+                updateFromState();
+            }
+        }
+
+        function changeQuality(val) {
+            engineSettings.quality = parseFloat(val);
+            const container = document.getElementById('canvas-container');
+            const width = container.clientWidth;
+            const height = container.clientHeight;
+
+            renderer.setPixelRatio(window.devicePixelRatio * engineSettings.quality);
+            renderer.setSize(width, height);
+            document.getElementById('resolution-display').innerText = `${Math.round(width * engineSettings.quality)} x ${Math.round(height * engineSettings.quality)}`;
+        }
+
+        function onWindowResize() {
+            const container = document.getElementById('canvas-container');
+            const width = container.clientWidth;
+            const height = container.clientHeight;
+
+            camera.aspect = width / height;
+            camera.updateProjectionMatrix();
+
+            renderer.setSize(width, height);
+            document.getElementById('resolution-display').innerText = `${Math.round(width * engineSettings.quality)} x ${Math.round(height * engineSettings.quality)}`;
+        }
+
+        function switchTab(tab) {
+            const tabSliders = document.getElementById('tab-btn-sliders');
+            const tabJson = document.getElementById('tab-btn-json');
+            const panelSliders = document.getElementById('panel-sliders');
+            const panelJson = document.getElementById('panel-json');
+
+            if (tab === 'sliders') {
+                tabSliders.className = "flex-1 py-2 text-[10px] font-bold tracking-wider rounded-lg transition duration-200 bg-slate-900/70 text-blue-400 border border-slate-800";
+                tabJson.className = "flex-1 py-2 text-[10px] font-bold tracking-wider rounded-lg transition duration-200 text-slate-400 hover:text-slate-200";
+                panelSliders.classList.remove('hidden');
+                panelJson.classList.add('hidden');
+            } else {
+                tabJson.className = "flex-1 py-2 text-[10px] font-bold tracking-wider rounded-lg transition duration-200 bg-slate-900/70 text-blue-400 border border-slate-800";
+                tabSliders.className = "flex-1 py-2 text-[10px] font-bold tracking-wider rounded-lg transition duration-200 text-slate-400 hover:text-slate-200";
+                panelSliders.classList.add('hidden');
+                panelJson.classList.remove('hidden');
+            }
+        }
+
+        function copyState() {
+            const text = document.getElementById('json-textarea').value;
+            const dummy = document.createElement("textarea");
+            document.body.appendChild(dummy);
+            dummy.value = text;
+            dummy.select();
+            document.execCommand("copy");
+            document.body.removeChild(dummy);
+
+            const badge = document.getElementById('json-badge');
+            const orig = badge.innerHTML;
+            badge.innerHTML = "Copied!";
+            setTimeout(() => badge.innerHTML = orig, 1500);
+        }
+
+        function resetToDefault() {
+            truckState = [
+                { part: "body", width: 2.4, height: 0.4, depth: 1.2, roundness: 0.08, offsetY: -0.1, color: "#1e3a8a" },
+                { part: "cab", width: 0.9, height: 0.8, depth: 1.1, roundness: 0.12, offsetX: 0.7, offsetY: 0.45, color: "#2563eb" },
+                { part: "wheels", radius: 0.42, width: 0.26, wheelbase: 0.85, trackWidth: 0.55, offsetY: -0.4, color: "#0f172a" }
+            ];
+            updateFromState();
+        }
+
+        window.addEventListener('DOMContentLoaded', initWebGL);
+    </script>
+</body>
+</html>

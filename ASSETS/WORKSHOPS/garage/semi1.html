@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SDF Truck Raymarcher</title>
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Three.js Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #050505;
+            font-family: 'Inter', sans-serif;
+        }
+        canvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Canvas container for full screen rendering -->
+    <div class="relative w-full h-full overflow-hidden">
+        <canvas id="sdfCanvas"></canvas>
+    </div>
+
+    <script>
+        
+        // Custom Fragment Shader for Raymarching the SDF Truck
+        const fragmentShader = `
+            uniform vec2 u_resolution;
+            uniform float u_time;
+            
+            const float MAX_DIST = 40.0;
+            const float SURF_DIST = 0.001;
+            const int MAX_STEPS = 100;
+
+            // Rotation matrices
+            mat2 rot2D(float angle) {
+                float s = sin(angle), c = cos(angle);
+                return mat2(c, -s, s, c);
+            }
+
+            // --- SDF PRIMITIVES ---
+            
+            // Rounded Box
+            float sdRoundBox(vec3 p, vec3 b, float r) {
+                vec3 q = abs(p) - b;
+                return length(max(q, 0.0)) + min(max(q.x, max(q.y, q.z)), 0.0) - r;
+            }
+
+            // Cylinder along Z-axis (for wheels)
+            float sdCylinderZ(vec3 p, float r, float h) {
+                vec2 d = abs(vec2(length(p.xy), p.z)) - vec2(r, h);
+                return min(max(d.x, d.y), 0.0) + length(max(d, 0.0));
+            }
+
+            // Cylinder along Y-axis (for smokestacks)
+            float sdCylinderY(vec3 p, float r, float h) {
+                vec2 d = abs(vec2(length(p.xz), p.y)) - vec2(r, h);
+                return min(max(d.x, d.y), 0.0) + length(max(d, 0.0));
+            }
+
+            // Cylinder along X-axis (for side tanks)
+            float sdCylinderX(vec3 p, float r, float h) {
+                vec2 d = abs(vec2(length(p.yz), p.x)) - vec2(r, h);
+                return min(max(d.x, d.y), 0.0) + length(max(d, 0.0));
+            }
+
+            // Combine operator with material ID
+            vec2 opU(vec2 d1, vec2 d2) {
+                return (d1.x < d2.x) ? d1 : d2;
+            }
+
+            // --- SCENE MAP ---
+            // Materials:
+            // 1.0 = Candy Red Paint
+            // 2.0 = Polished Chrome
+            // 3.0 = Dark Rubber (Tires)
+            // 4.0 = Dark Window Glass
+            // 5.0 = Studio Floor
+            // 6.0 = Glowing Headlights (White LED)
+            // 7.0 = Glowing Tail/Cabin Lights (Orange/Red)
+            // 8.0 = Chassis Frame (Dark Metal)
+
+            vec2 map(vec3 p) {
+                vec2 res = vec2(1e10, 0.0);
+
+                // Ground plane
+                float dGround = p.y + 0.65;
+                res = opU(res, vec2(dGround, 5.0));
+
+                // Engine idle vibration (subtle dynamic transform)
+                vec3 pTruck = p;
+                float engineVibe = sin(u_time * 45.0) * 0.0035;
+                pTruck.y += engineVibe;
+
+                // --- 1. CHASSIS FRAME ---
+                float dChassis = sdRoundBox(pTruck - vec3(-0.25, -0.22, 0.0), vec3(1.75, 0.06, 0.35), 0.02);
+                res = opU(res, vec2(dChassis, 8.0));
+
+                // Rear chassis details (fifth wheel coupling plate)
+                float dFifthWheel = sdRoundBox(pTruck - vec3(-1.0, -0.12, 0.0), vec3(0.18, 0.04, 0.22), 0.01);
+                res = opU(res, vec2(dFifthWheel, 8.0));
+
+                // --- 2. MAIN BODY (Paint) ---
+                // Cabin & Sleeper combined
+                float dCab = sdRoundBox(pTruck - vec3(-0.15, 0.38, 0.0), vec3(0.52, 0.48, 0.43), 0.04);
+                // Hood / Engine Bay
+                float dHood = sdRoundBox(pTruck - vec3(0.72, 0.14, 0.0), vec3(0.38, 0.24, 0.42), 0.03);
+                
+                // Merge Cab and Hood
+                float dBody = min(dCab, dHood);
+
+                // Front wheel arches carved out of the hood sides
+                float dArchF = sdCylinderZ(pTruck - vec3(0.78, -0.3, 0.0), 0.38, 0.5);
+                dBody = max(dBody, -dArchF);
+
+                // Rear wheel mudguards (fenders)
+                float dMudguards = sdRoundBox(pTruck - vec3(-1.0, -0.06, 0.0), vec3(0.85, 0.15, 0.45), 0.02);
+                // Carve out double rear wheels arches
+                float dArchR1 = sdCylinderZ(pTruck - vec3(-0.55, -0.3, 0.0), 0.38, 0.5);
+                float dArchR2 = sdCylinderZ(pTruck - vec3(-1.35, -0.3, 0.0), 0.38, 0.5);
+                dMudguards = max(dMudguards, -dArchR1);
+                dMudguards = max(dMudguards, -dArchR2);
+                dBody = min(dBody, dMudguards);
+
+                res = opU(res, vec2(dBody, 1.0));
+
+                // --- 3. CHROME PARTS ---
+                // Massive front bumper
+                float dBumper = sdRoundBox(pTruck - vec3(1.15, -0.25, 0.0), vec3(0.06, 0.08, 0.48), 0.02);
+                // Front Radiator Grille
+                float dGrill = sdRoundBox(pTruck - vec3(1.10, 0.14, 0.0), vec3(0.02, 0.20, 0.32), 0.015);
+                // Smokestacks (Twin Exhausts on both sides of the cab)
+                float dSmokeL = sdCylinderY(pTruck - vec3(0.32, 0.62, 0.48), 0.04, 0.65);
+                float dSmokeR = sdCylinderY(pTruck - vec3(0.32, 0.62, -0.48), 0.04, 0.65);
+                
+                // Curved exhaust tips
+                float dExhaustTipL = sdCylinderZ(pTruck - vec3(0.30, 1.27, 0.48), 0.04, 0.04);
+                float dExhaustTipR = sdCylinderZ(pTruck - vec3(0.30, 1.27, -0.48), 0.04, 0.04);
+
+                // Fuel Tanks (Chassis sides)
+                float dTankL = sdCylinderX(pTruck - vec3(-0.15, -0.22, 0.48), 0.16, 0.42);
+                float dTankR = sdCylinderX(pTruck - vec3(-0.15, -0.22, -0.48), 0.16, 0.42);
+
+                float dChrome = min(dBumper, min(dGrill, min(dSmokeL, min(dSmokeR, min(dExhaustTipL, min(dExhaustTipR, min(dTankL, dTankR)))))));
+                res = opU(res, vec2(dChrome, 2.0));
+
+                // --- 4. WHEELS (Rubber + Chrome Rims) ---
+                // Front Wheels (Single tyre each side)
+                float dWheelFL = sdCylinderZ(pTruck - vec3(0.78, -0.32, 0.44), 0.30, 0.09);
+                float dWheelFR = sdCylinderZ(pTruck - vec3(0.78, -0.32, -0.44), 0.30, 0.09);
+
+                // Rear Axle 1 Wheels (Dual tyres mapped with slightly wider cylinder)
+                float dWheelRL1 = sdCylinderZ(pTruck - vec3(-0.55, -0.32, 0.43), 0.30, 0.12);
+                float dWheelRR1 = sdCylinderZ(pTruck - vec3(-0.55, -0.32, -0.43), 0.30, 0.12);
+
+                // Rear Axle 2 Wheels (Dual tyres)
+                float dWheelRL2 = sdCylinderZ(pTruck - vec3(-1.35, -0.32, 0.43), 0.30, 0.12);
+                float dWheelRR2 = sdCylinderZ(pTruck - vec3(-1.35, -0.32, -0.43), 0.30, 0.12);
+
+                float dWheels = min(dWheelFL, min(dWheelFR, min(dWheelRL1, min(dWheelRR1, min(dWheelRL2, dWheelRR2)))));
+                res = opU(res, vec2(dWheels, 3.0));
+
+                // Chrome Rims inside the wheels
+                float dRimFL = sdCylinderZ(pTruck - vec3(0.78, -0.32, 0.45), 0.18, 0.10);
+                float dRimFR = sdCylinderZ(pTruck - vec3(0.78, -0.32, -0.45), 0.18, 0.10);
+                float dRimRL1 = sdCylinderZ(pTruck - vec3(-0.55, -0.32, 0.44), 0.18, 0.13);
+                float dRimRR1 = sdCylinderZ(pTruck - vec3(-0.55, -0.32, -0.44), 0.18, 0.13);
+                float dRimRL2 = sdCylinderZ(pTruck - vec3(-1.35, -0.32, 0.44), 0.18, 0.13);
+                float dRimRR2 = sdCylinderZ(pTruck - vec3(-1.35, -0.32, -0.44), 0.18, 0.13);
+
+                float dRims = min(dRimFL, min(dRimFR, min(dRimRL1, min(dRimRR1, min(dRimRL2, dRimRR2)))));
+                res = opU(res, vec2(dRims, 2.0));
+
+                // --- 5. WINDOW GLASS ---
+                // Front Windshield
+                float dWindshield = sdRoundBox(pTruck - vec3(0.42, 0.58, 0.0), vec3(0.04, 0.16, 0.36), 0.015);
+                // Side Windows (Driver & Passenger doors)
+                float dWinSideL = sdRoundBox(pTruck - vec3(0.08, 0.58, 0.42), vec3(0.22, 0.16, 0.03), 0.015);
+                float dWinSideR = sdRoundBox(pTruck - vec3(0.08, 0.58, -0.42), vec3(0.22, 0.16, 0.03), 0.015);
+
+                float dGlass = min(dWindshield, min(dWinSideL, dWinSideR));
+                res = opU(res, vec2(dGlass, 4.0));
+
+                // --- 6. LIGHTS & DETAILS ---
+                // Headlights embedded into custom side blocks
+                float dLightL = sdCylinderX(pTruck - vec3(1.11, -0.12, 0.38), 0.06, 0.03);
+                float dLightR = sdCylinderX(pTruck - vec3(1.11, -0.12, -0.38), 0.06, 0.03);
+                float dLights = min(dLightL, dLightR);
+                res = opU(res, vec2(dLights, 6.0));
+
+                // Cab rooftop amber marker lights
+                float dAmber1 = sdRoundBox(pTruck - vec3(0.32, 0.88, 0.22), vec3(0.04, 0.02, 0.02), 0.01);
+                float dAmber2 = sdRoundBox(pTruck - vec3(0.32, 0.88, -0.22), vec3(0.04, 0.02, 0.02), 0.01);
+                float dAmber3 = sdRoundBox(pTruck - vec3(0.32, 0.88, 0.0), vec3(0.04, 0.02, 0.02), 0.01);
+                float dAmbers = min(dAmber1, min(dAmber2, dAmber3));
+                res = opU(res, vec2(dAmbers, 7.0));
+
+                return res;
+            }
+
+            // --- NORMAL ESTIMATION ---
+            vec3 getNormal(vec3 p) {
+                vec2 e = vec2(0.001, 0.0);
+                float d = map(p).x;
+                vec3 n = d - vec3(
+                    map(p - e.xyy).x,
+                    map(p - e.yxy).x,
+                    map(p - e.yyx).x
+                );
+                return normalize(n);
+            }
+
+            // --- RAYMARCH LOOP ---
+            vec2 raymarch(vec3 ro, vec3 rd) {
+                float t = 0.0;
+                for (int i = 0; i < MAX_STEPS; i++) {
+                    vec3 p = ro + rd * t;
+                    vec2 res = map(p);
+                    if (abs(res.x) < SURF_DIST) return vec2(t, res.y);
+                    t += res.x;
+                    if (t >= MAX_DIST) break;
+                }
+                return vec2(-1.0, 0.0);
+            }
+
+            // --- AMBIENT OCCLUSION ---
+            float calcAO(in vec3 pos, in vec3 nor) {
+                float occ = 0.0;
+                float sca = 1.0;
+                for (int i = 0; i < 5; i++) {
+                    float h = 0.01 + 0.12 * float(i) / 4.0;
+                    float d = map(pos + h * nor).x;
+                    occ += (h - d) * sca;
+                    sca *= 0.95;
+                }
+                return clamp(1.0 - 3.0 * occ, 0.0, 1.0);
+            }
+
+            // --- SOFT SHADOWS ---
+            float calcShadow(in vec3 ro, in vec3 rd, float mint, float maxt, float k) {
+                float res = 1.0;
+                float t = mint;
+                for (int i = 0; i < 30; i++) {
+                    float h = map(ro + rd * t).x;
+                    if (h < 0.001) return 0.0;
+                    res = min(res, k * h / t);
+                    t += clamp(h, 0.01, 0.2);
+                    if (t > maxt) break;
+                }
+                return clamp(res, 0.0, 1.0);
+            }
+
+            // --- ENVIRONMENT SKY GRADIENT ---
+            vec3 getSkyColor(vec3 rd) {
+                float horizon = max(0.0, 1.0 - abs(rd.y));
+                vec3 col = mix(vec3(0.03, 0.04, 0.08), vec3(0.01, 0.01, 0.02), rd.y * 0.5 + 0.5);
+                col += vec3(0.12, 0.08, 0.2) * pow(horizon, 4.0); // Moody atmospheric glow
+                return col;
+            }
+
+            // --- SHADING & MATERIAL PROCESSING ---
+            vec3 shade(vec3 pos, vec3 nor, vec3 rd, float matId) {
+                // Key Light (Warm Sun/Studio Overhead Light)
+                vec3 ligPos = vec3(4.0, 6.5, 3.0);
+                vec3 lig = normalize(ligPos - pos);
+                float dif = clamp(dot(nor, lig), 0.0, 1.0);
+                
+                // Back/Fill Light (Cool Neon Rim Light)
+                vec3 fillLig = normalize(vec3(-4.0, 2.0, -3.0));
+                float fill = clamp(dot(nor, fillLig), 0.0, 1.0);
+
+                // Shadows and Ambient Occlusion
+                float shadow = calcShadow(pos + nor * 0.01, lig, 0.02, 6.0, 16.0);
+                float ao = calcAO(pos, nor);
+
+                // Material Base Properties
+                vec3 baseCol = vec3(0.0);
+                float spec = 0.0;
+                float roughness = 0.5;
+
+                if (matId == 1.0) {
+                    // Candy Red Metallic Paint
+                    baseCol = vec3(0.72, 0.01, 0.05);
+                    spec = 0.8;
+                    roughness = 0.1;
+                } else if (matId == 2.0) {
+                    // Chrome
+                    baseCol = vec3(0.95, 0.95, 0.98);
+                    spec = 1.5;
+                    roughness = 0.02;
+                } else if (matId == 3.0) {
+                    // Tires / Rubber
+                    baseCol = vec3(0.08, 0.08, 0.09);
+                    spec = 0.1;
+                    roughness = 0.8;
+                } else if (matId == 4.0) {
+                    // Glass Windows
+                    baseCol = vec3(0.04, 0.05, 0.08);
+                    spec = 1.2;
+                    roughness = 0.01;
+                } else if (matId == 5.0) {
+                    // Floor (Subtle Tech Grid)
+                    vec3 gridCol = vec3(0.07, 0.07, 0.09);
+                    vec2 grid = abs(fract(pos.xz * 2.0 - 0.5) - 0.5) / fwidth(pos.xz * 2.0);
+                    float line = min(grid.x, grid.y);
+                    float gridPattern = 1.0 - min(line, 1.0);
+                    baseCol = mix(vec3(0.022), vec3(0.05, 0.08, 0.14), gridPattern * 0.8);
+                    
+                    // Soft floor reflections
+                    spec = 0.2;
+                    roughness = 0.45;
+                } else if (matId == 6.0) {
+                    // Headlights (Slight yellow tint/warm white)
+                    return vec3(1.6, 1.6, 1.5);
+                } else if (matId == 7.0) {
+                    // Rooftop Marker Lights (Warm Amber)
+                    return vec3(1.8, 0.65, 0.05);
+                } else if (matId == 8.0) {
+                    // Chassis Frame
+                    baseCol = vec3(0.14, 0.14, 0.16);
+                    spec = 0.3;
+                    roughness = 0.6;
+                }
+
+                // Diffuse combination
+                vec3 col = baseCol * (dif * vec3(1.0, 0.95, 0.85) * shadow + fill * vec3(0.3, 0.45, 0.7));
+                
+                // Specular Phong
+                vec3 halfDir = normalize(lig - rd);
+                float specPower = pow(clamp(dot(nor, halfDir), 0.0, 1.0), 120.0 * (1.0 - roughness));
+                vec3 specularCol = vec3(spec * specPower * shadow);
+
+                col += specularCol;
+                col *= ao;
+
+                return col;
+            }
+
+            void main() {
+                // Normalized pixel coordinates (from -1 to 1)
+                vec2 uv = (gl_FragCoord.xy - u_resolution * 0.5) / u_resolution.y;
+
+                // Slowly rotating camera rig
+                float angle = u_time * 0.18;
+                float cameraDist = 4.2;
+                float height = 1.1 + sin(u_time * 0.15) * 0.45;
+
+                vec3 ro = vec3(cameraDist * cos(angle), height, cameraDist * sin(angle));
+                vec3 ta = vec3(0.0, 0.15, 0.0); // Look at camera target
+
+                // Camera matrix setup
+                vec3 cw = normalize(ta - ro);
+                vec3 cp = vec3(0.0, 1.0, 0.0);
+                vec3 cu = normalize(cross(cw, cp));
+                vec3 cv = normalize(cross(cu, cw));
+                
+                // Perspective Ray direction
+                vec3 rd = normalize(uv.x * cu + uv.y * cv + 1.6 * cw);
+
+                // Trace primary ray
+                vec2 res = raymarch(ro, rd);
+
+                vec3 finalCol = vec3(0.0);
+
+                if (res.x > 0.0) {
+                    vec3 pos = ro + rd * res.x;
+                    vec3 nor = getNormal(pos);
+                    vec3 color = shade(pos, nor, rd, res.y);
+
+                    // Cast reflection ray for reflective materials (Chassis, Body, Chrome, Glass, Floor)
+                    if (res.y == 1.0 || res.y == 2.0 || res.y == 4.0 || res.y == 5.0) {
+                        float reflectivity = 0.12;
+                        if (res.y == 2.0) reflectivity = 0.75; // Chrome is highly reflective
+                        if (res.y == 4.0) reflectivity = 0.35; // Glass is semi-reflective
+                        if (res.y == 5.0) reflectivity = 0.08; // Floor reflection
+
+                        vec3 refRd = reflect(rd, nor);
+                        vec3 refRo = pos + nor * 0.015;
+                        vec2 refRes = raymarch(refRo, refRd);
+
+                        vec3 reflectionCol = getSkyColor(refRd);
+                        if (refRes.x > 0.0) {
+                            vec3 refPos = refRo + refRd * refRes.x;
+                            vec3 refNor = getNormal(refPos);
+                            reflectionCol = shade(refPos, refNor, refRd, refRes.y);
+                        }
+                        color = mix(color, reflectionCol, reflectivity);
+                    }
+
+                    finalCol = color;
+                } else {
+                    finalCol = getSkyColor(rd);
+                }
+
+                // Cinematic Post Processing: Tone mapping, Vignette, Gamma Correction
+                finalCol = finalCol / (finalCol + vec3(1.0)); // Simple tone map
+                finalCol = pow(finalCol, vec3(1.0 / 2.2));     // Gamma Correction
+
+                // Subtle screen vignette
+                vec2 coord = gl_FragCoord.xy / u_resolution.xy;
+                finalCol *= 0.5 + 0.5 * pow(16.0 * coord.x * coord.y * (1.0 - coord.x) * (1.0 - coord.y), 0.25);
+
+                gl_FragColor = vec4(finalCol, 1.0);
+            }
+        `;
+
+
+        let renderer, scene, camera, material, mesh;
+        let startTime = Date.now();
+
+        function init() {
+            const canvas = document.getElementById('sdfCanvas');
+            
+            // WebGL renderer config
+            renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, powerPreference: "high-performance" });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            // Limit device pixel ratio for smooth performance (particularly on retina/high resolution displays)
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+
+            scene = new THREE.Scene();
+
+            // Orthographic camera for full-screen shader rendering
+            camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+
+            // Shading material with uniform hooks
+            material = new THREE.ShaderMaterial({
+                fragmentShader: fragmentShader,
+                vertexShader: `
+                    void main() {
+                        gl_Position = vec4(position, 1.0);
+                    }
+                `,
+                uniforms: {
+                    u_resolution: { value: new THREE.Vector2(window.innerWidth, window.innerHeight) },
+                    u_time: { value: 0.0 }
+                }
+            });
+
+
+            // Quad filling the screen
+            const geometry = new THREE.PlaneGeometry(2, 2);
+            mesh = new THREE.Mesh(geometry, material);
+            scene.add(mesh);
+
+            window.addEventListener('resize', onWindowResize, false);
+
+            // Forward Escape and P keypresses to parent window to toggle pause menu
+            window.addEventListener("keydown", (e) => {
+                if (e.key === "Escape" || e.key.toLowerCase() === "p") {
+                    if (window.parent && window.parent.dispatchEvent) {
+                        window.parent.dispatchEvent(new KeyboardEvent("keydown", { key: e.key, code: e.code }));
+                    }
+                }
+            });
+
+            animate();
+        }
+
+        // Handle window resizing seamlessly
+        function onWindowResize() {
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+            material.uniforms.u_resolution.value.set(window.innerWidth, window.innerHeight);
+        }
+
+
+        // Render loop
+        function animate() {
+            requestAnimationFrame(animate);
+
+            // Update time uniforms
+            const elapsedMilliseconds = Date.now() - startTime;
+            material.uniforms.u_time.value = elapsedMilliseconds / 1000.0;
+
+            renderer.render(scene, camera);
+        }
+
+        // Initialize scene on window load
+        window.onload = init;
+    </script>
+</body>
+</html>
