@@ -1,0 +1,249 @@
+import { showToast } from '../ui.js';
+import { carPhysics } from '../physics.js';
+
+/**
+ * Initializes all active interactive meshes and trackers for the specified map environment
+ */
+export function initMapInteractions(scene, mapId) {
+  // Cleanup any active interactions first
+  cleanupInteractions(scene);
+  
+  const state = {
+    mapId: mapId,
+    boostPads: [],
+    hazards: [],
+    checkpoints: [],
+    passedCheckpoints: [false, false, false, false],
+    wormhole: null,
+    screenFlash: 0.0,
+    boostTimer: 0.0
+  };
+  scene.customData.interactionsState = state;
+  
+  if (mapId === "map1") {
+    // 1. Spawning 3 glowing Neon Cyan Boost Pads
+    const boostPos = [
+      new BABYLON.Vector3(15, 0.02, 20),
+      new BABYLON.Vector3(-30, 0.02, -35),
+      new BABYLON.Vector3(40, 0.02, 45)
+    ];
+    
+    const boostMat = new BABYLON.StandardMaterial("boostPadMat", scene);
+    boostMat.emissiveColor = new BABYLON.Color3(0.0, 0.8, 1.0); // Neon Cyan
+    boostMat.disableLighting = true;
+    
+    boostPos.forEach((pos, idx) => {
+      const pad = BABYLON.MeshBuilder.CreateBox("boostPad_" + idx, { width: 3.5, height: 0.04, depth: 4.5 }, scene);
+      pad.position.copyFrom(pos);
+      pad.material = boostMat;
+      state.boostPads.push(pad);
+      scene.customData.mapMeshes.push(pad);
+    });
+    
+    // 2. Spawning 2 glowing Hazard Wireframe barricades
+    const hazardPos = [
+      new BABYLON.Vector3(5, 0.5, 35),
+      new BABYLON.Vector3(-20, 0.5, 15)
+    ];
+    
+    const hazardMat = new BABYLON.StandardMaterial("hazardMat", scene);
+    hazardMat.emissiveColor = new BABYLON.Color3(1.0, 0.1, 0.0); // Warning Red
+    hazardMat.wireframe = true;
+    hazardMat.disableLighting = true;
+    
+    hazardPos.forEach((pos, idx) => {
+      const barricade = BABYLON.MeshBuilder.CreateBox("hazard_" + idx, { width: 4.5, height: 1.0, depth: 0.6 }, scene);
+      barricade.position.copyFrom(pos);
+      barricade.material = hazardMat;
+      state.hazards.push(barricade);
+      scene.customData.mapMeshes.push(barricade);
+    });
+    
+  } else if (mapId === "map2") {
+    // Checkpoint gate vectors in Tokyo grid
+    state.checkpoints = [
+      new BABYLON.Vector3(0, 0, 20),
+      new BABYLON.Vector3(45, 0, -10),
+      new BABYLON.Vector3(-40, 0, -45),
+      new BABYLON.Vector3(-25, 0, 35)
+    ];
+    
+  } else if (mapId === "map3") {
+    // Spawning a massive rotating space wormhole portal at center (0, 1.2, -25)
+    const portalCenter = new BABYLON.Vector3(0, 1.2, -25);
+    
+    const portalContainer = new BABYLON.TransformNode("portalContainer", scene);
+    portalContainer.position.copyFrom(portalCenter);
+    
+    const outerRingMat = new BABYLON.StandardMaterial("outerRingMat", scene);
+    outerRingMat.emissiveColor = new BABYLON.Color3(0.65, 0.0, 0.9); // Deep space purple
+    outerRingMat.wireframe = true;
+    outerRingMat.disableLighting = true;
+    
+    const outerRing = BABYLON.MeshBuilder.CreateCylinder("outerRing", {
+      tessellation: 12,
+      height: 0.5,
+      diameterTop: 6.0,
+      diameterBottom: 6.0
+    }, scene);
+    outerRing.rotation.x = Math.PI / 2; // Orient forward
+    outerRing.material = outerRingMat;
+    outerRing.parent = portalContainer;
+    
+    const innerCoreMat = new BABYLON.StandardMaterial("innerCoreMat", scene);
+    innerCoreMat.emissiveColor = new BABYLON.Color3(1.0, 0.8, 0.0); // Liquid gold core
+    innerCoreMat.wireframe = true;
+    innerCoreMat.disableLighting = true;
+    
+    const innerCore = BABYLON.MeshBuilder.CreateSphere("innerCore", { segments: 6, diameter: 2.2 }, scene);
+    innerCore.material = innerCoreMat;
+    innerCore.parent = portalContainer;
+    
+    state.wormhole = {
+      container: portalContainer,
+      outerRing: outerRing,
+      innerCore: innerCore,
+      position: portalCenter
+    };
+    
+    scene.customData.mapMeshes.push(outerRing, innerCore);
+  }
+}
+
+/**
+ * Checks for player interactions and ticks dynamic visual overlays / boosts
+ */
+export function updateMapInteractions(scene, dt, timeElapsed) {
+  const state = scene.customData.interactionsState;
+  if (!state) return;
+  
+  const carBox = scene.customData.carBox;
+  if (!carBox) return;
+  
+  const carPos = carBox.position;
+  
+  // --- 1. HANDLE SCREEN FLASH DECAY ---
+  if (state.screenFlash > 0.01) {
+    state.screenFlash -= dt * 2.0; // Fade quickly
+    const flashColor = new BABYLON.Color4(1.0, 0.15, 0.8, 1.0); // Vibrant Pink Flash
+    scene.clearColor = BABYLON.Color4.Lerp(scene.clearColor, flashColor, state.screenFlash);
+  }
+  
+  // --- 2. BOOST DECAY CONTROLLER ---
+  if (state.boostTimer > 0.01) {
+    state.boostTimer -= dt;
+    if (state.boostTimer <= 0.01) {
+      // Revert tail drift smoke color scheme back to theme defaults
+      const p = scene.customData.driftParticles;
+      if (p) {
+        p.color1 = new BABYLON.Color4(1.0, 0.35, 0.0, 0.4);
+        p.color2 = new BABYLON.Color4(1.0, 0.15, 0.0, 0.15);
+      }
+    }
+  }
+  
+  if (state.mapId === "map1") {
+    // A. TEST BOOST PAD TRIGGER
+    state.boostPads.forEach((pad, idx) => {
+      const dist = BABYLON.Vector3.Distance(carPos, pad.position);
+      if (dist < 2.2 && state.boostTimer <= 0.01) {
+        carPhysics.velocity = carPhysics.maxSpeed * 1.62; // Hyper drive thrust force
+        state.boostTimer = 2.0; // Speed duration seconds
+        showToast("🚀 BOOST SECTOR ENGAGED! +160% THRUST", "boost");
+        
+        // Morph tire smoke particles to brilliant neon blue
+        const p = scene.customData.driftParticles;
+        if (p) {
+          p.color1 = new BABYLON.Color4(0.0, 0.85, 1.0, 0.85);
+          p.color2 = new BABYLON.Color4(0.0, 0.45, 1.0, 0.4);
+          p.emitRate = 220;
+        }
+      }
+    });
+    
+    // B. TEST HAZARD BARRICADES COLLISION
+    state.hazards.forEach((haz, idx) => {
+      const dist = BABYLON.Vector3.Distance(carPos, haz.position);
+      if (dist < 2.0) {
+        // Reverse vector bounceback recoil
+        carPhysics.velocity = -carPhysics.velocity * 0.45;
+        carPhysics.heading += 0.4 * (Math.random() > 0.5 ? 1.0 : -1.0);
+        
+        // Displacement nudge to prevent intersection traps
+        const pushDirection = carPos.subtract(haz.position).normalize().scale(0.85);
+        carPhysics.position.addInPlace(pushDirection);
+        
+        state.screenFlash = 0.55; // Screen pulse
+        showToast("⚠️ STRUCTURAL COLLISION! CHASSIS RECOIL", "hazard");
+      }
+    });
+    
+  } else if (state.mapId === "map2") {
+    // A. TEST ARCH CHECKPOINT ENCOUNTERS
+    state.checkpoints.forEach((pos, idx) => {
+      if (state.passedCheckpoints[idx]) return;
+      
+      const dist = BABYLON.Vector3.Distance(carPos, pos);
+      if (dist < 3.2) {
+        state.passedCheckpoints[idx] = true;
+        
+        // Visually toggle active gate neon colors to cyber cyan
+        const lintel = scene.getMeshByName("topLintel" + idx);
+        if (lintel) {
+          const activeMat = new BABYLON.StandardMaterial("activeLintelMat_" + idx, scene);
+          activeMat.emissiveColor = new BABYLON.Color3(0.0, 0.85, 1.0);
+          activeMat.disableLighting = true;
+          lintel.material = activeMat;
+          state.checkpoints[idx] = activeMat; // Track for disposal
+        }
+        
+        const passedCount = state.passedCheckpoints.filter(Boolean).length;
+        if (passedCount === 4) {
+          showToast("🏆 GRID RUN COMPLETE! SYSTEM CALIBRATED", "success");
+          state.screenFlash = 0.5;
+        } else {
+          showToast(`✨ CHECKPOINT ${passedCount}/4 COMPLETED!`, "success");
+        }
+      }
+    });
+    
+  } else if (state.mapId === "map3" && state.wormhole) {
+    // A. SPIN WORMHOLE RINGS CONTROLLER
+    state.wormhole.outerRing.rotation.y += 0.025;
+    state.wormhole.innerCore.rotation.z += 0.04;
+    
+    // B. TEST HYPER-WORMHOLE FLUX WARP
+    const dist = BABYLON.Vector3.Distance(carPos, state.wormhole.position);
+    if (dist < 2.5) {
+      // Warp to a randomized coordinate coordinate offset
+      const warpX = (Math.random() > 0.5 ? 1.0 : -1.0) * (20.0 + Math.random() * 30.0);
+      const warpZ = (Math.random() > 0.5 ? 1.0 : -1.0) * (20.0 + Math.random() * 30.0);
+      
+      carPhysics.position.set(warpX, carPhysics.position.y, warpZ);
+      carPhysics.velocity *= 0.35; // decelerate slightly on warp
+      
+      state.screenFlash = 0.9; // Massive violet warp flash
+      showToast("🌀 WARP DRIVE DETECTED: HYPER-SPACE DISPLACEMENT", "warp");
+    }
+  }
+}
+
+/**
+ * Safely disposes all active interactive materials, assemblies, and resources
+ */
+export function cleanupInteractions(scene) {
+  if (scene.customData && scene.customData.interactionsState) {
+    const state = scene.customData.interactionsState;
+    if (state.checkpoints) {
+      state.checkpoints.forEach(ref => {
+        if (ref instanceof BABYLON.StandardMaterial) {
+          ref.dispose();
+        }
+      });
+    }
+    if (state.wormhole && state.wormhole.container) {
+      state.wormhole.container.dispose();
+    }
+    scene.customData.interactionsState = null;
+  }
+}

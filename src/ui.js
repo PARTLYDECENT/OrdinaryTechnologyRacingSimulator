@@ -65,11 +65,37 @@ export function breakAutopilotUI(onAutopilotToggle) {
     syncAutopilotUI(onAutopilotToggle);
 
     // Show Manual Override Notification briefly
-    const toast = document.getElementById("manualOverrideToast");
-    if (toast) {
-      toast.style.opacity = "1";
-      setTimeout(() => { toast.style.opacity = "0"; }, 2000);
+    showToast("⚡ MANUAL SYSTEM ENGAGED");
+  }
+}
+
+// Dynamically trigger styled toast notifications on the dashboard
+export function showToast(message, colorStyle = null) {
+  const toast = document.getElementById("manualOverrideToast");
+  if (toast) {
+    toast.innerHTML = message;
+    
+    // Reset styles
+    toast.className = "self-center glass-panel px-4 py-2 rounded-full text-xs font-semibold border transition-opacity duration-500 shadow-lg pointer-events-none";
+    
+    if (colorStyle === "boost") {
+      toast.classList.add("text-cyan-400", "border-cyan-500/50", "bg-cyan-500/10");
+    } else if (colorStyle === "hazard") {
+      toast.classList.add("text-red-400", "border-red-500/50", "bg-red-500/10");
+    } else if (colorStyle === "success") {
+      toast.classList.add("text-yellow-400", "border-yellow-500/50", "bg-yellow-500/10");
+    } else if (colorStyle === "warp") {
+      toast.classList.add("text-fuchsia-400", "border-fuchsia-500/50", "bg-fuchsia-500/10");
+    } else {
+      toast.classList.add("text-orange-400", "border-orange-500/30");
     }
+
+    toast.style.opacity = "1";
+    
+    if (window.toastTimeout) clearTimeout(window.toastTimeout);
+    window.toastTimeout = setTimeout(() => {
+      toast.style.opacity = "0";
+    }, 2500);
   }
 }
 

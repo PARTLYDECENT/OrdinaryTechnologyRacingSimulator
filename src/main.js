@@ -5,6 +5,8 @@ import { autopilot, targetDayNight, initUI, breakAutopilotUI, updateUI, setAutop
 import { createScene, uLightDirValue } from './scene.js';
 import { initPauseMenu, getIsPaused } from './pause_menu.js';
 import { updateHeadlights } from './garage/headlights.js';
+import { updateMapInteractions } from './maps/interactions.js';
+
 
 window.addEventListener('DOMContentLoaded', () => {
   const canvas = document.getElementById("renderCanvas");
@@ -128,6 +130,10 @@ window.addEventListener('DOMContentLoaded', () => {
 
     // --- VEHICLE DYNAMICS UPDATES ---
     updatePhysics(dt, keys, touchState, isAutopilot, timeElapsed, data.carBox);
+
+    // --- DYNAMIC INTERACTIVE MAP ELEMENTS (Boost pads, obstacles, checkpoints, wormholes) ---
+    updateMapInteractions(scene, dt, timeElapsed);
+
 
     // Sync engine calculation output to SDF matrix parameters
     data.carBox.computeWorldMatrix(true);

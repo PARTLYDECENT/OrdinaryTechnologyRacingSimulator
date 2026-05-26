@@ -6,6 +6,8 @@ import { loadMap2, cleanupMap2 } from './maps/map2.js';
 import { loadMap3, cleanupMap3 } from './maps/map3.js';
 import { createSkybox } from './maps/dynamicsky.js';
 import { initHeadlights, attachHeadlights } from './garage/headlights.js';
+import { initMapInteractions } from './maps/interactions.js';
+
 
 // Import seamless ground images for our high-fidelity map texture floors
 const outpostGroundImg = new URL('../assets/images/outpost_ground.png', import.meta.url).href;
@@ -103,7 +105,10 @@ export function createScene(engine, canvas, initialCarPosition) {
   createSkybox(scene);
 
   // Load baseline Cyberpunk Outpost map
+  scene.customData.activeMapId = "map1";
   loadMap1(scene);
+  initMapInteractions(scene, "map1");
+
 
   // Instantiate dynamic headlights and attach to initial vehicle (Sports Car)
   initHeadlights(scene);
@@ -191,14 +196,20 @@ export function createScene(engine, canvas, initialCarPosition) {
     cleanupMap3(scene);
 
     // 2. Load the target map
-    if (mapId === "map2") {
+    const targetMap = mapId || "map1";
+    scene.customData.activeMapId = targetMap;
+    if (targetMap === "map2") {
       loadMap2(scene);
-    } else if (mapId === "map3") {
+    } else if (targetMap === "map3") {
       loadMap3(scene);
     } else {
       loadMap1(scene);
     }
+
+    // 3. Re-initialize interactive elements
+    initMapInteractions(scene, targetMap);
   };
+
 
   return scene;
 }
