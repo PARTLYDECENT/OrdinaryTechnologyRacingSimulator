@@ -6,6 +6,8 @@ import { createScene, uLightDirValue } from './scene.js';
 import { initPauseMenu, getIsPaused } from './pause_menu.js';
 import { updateHeadlights } from './garage/headlights.js';
 import { updateMapInteractions } from './maps/interactions.js';
+import { initEngineSound, updateEngineSound, muteEngineSound, getAudioStatus } from './audio.js';
+
 
 
 window.addEventListener('DOMContentLoaded', () => {
@@ -22,12 +24,27 @@ window.addEventListener('DOMContentLoaded', () => {
   // 2. Initialize Physics state
   initPhysics();
 
+  // Helper to trigger audio initialization on any user interaction (keyboard/mouse/pedal)
+  const tryStartAudioOnUserInteraction = () => {
+    if (!getAudioStatus()) {
+      initEngineSound();
+      const btnAudio = document.getElementById("btnAudio");
+      if (btnAudio && getAudioStatus()) {
+        btnAudio.innerHTML = "🔊 Synth Sound: ON";
+        btnAudio.classList.add("neon-shadow-orange");
+        btnAudio.classList.remove("bg-cyan-500/20", "text-cyan-400", "border-cyan-500/50");
+      }
+    }
+  };
+
   // Helper callbacks
   const onInputTriggered = () => {
+    tryStartAudioOnUserInteraction();
     breakAutopilotUI((state) => {
       // Sync local autopilot status
     });
   };
+
 
   const onResetPhysics = () => {
     resetPhysics();
@@ -52,6 +69,26 @@ window.addEventListener('DOMContentLoaded', () => {
       // Handle Day/Night target changes manually
     }
   );
+
+  // 4.1. Initialize Audio UI toggle button click listeners
+  const btnAudio = document.getElementById("btnAudio");
+  if (btnAudio) {
+    btnAudio.addEventListener("click", () => {
+      const active = getAudioStatus();
+      if (active) {
+        muteEngineSound();
+        btnAudio.innerHTML = "🔊 Synth Sound: OFF";
+        btnAudio.classList.remove("neon-shadow-orange");
+        btnAudio.classList.add("bg-cyan-500/20", "text-cyan-400", "border-cyan-500/50");
+      } else {
+        initEngineSound();
+        btnAudio.innerHTML = "🔊 Synth Sound: ON";
+        btnAudio.classList.add("neon-shadow-orange");
+        btnAudio.classList.remove("bg-cyan-500/20", "text-cyan-400", "border-cyan-500/50");
+      }
+    });
+  }
+
 
   // 5. Create Scene composition
   scene = createScene(engine, canvas, carPhysics.position);
@@ -133,6 +170,13 @@ window.addEventListener('DOMContentLoaded', () => {
 
     // --- DYNAMIC INTERACTIVE MAP ELEMENTS (Boost pads, obstacles, checkpoints, wormholes) ---
     updateMapInteractions(scene, dt, timeElapsed);
+
+    // --- AUDIO SYNTHESIS DYNAMIC REV CONTROLLER ---
+    const throttlePressed = keys.w || touchState.gas || (isAutopilot && Math.abs(carPhysics.velocity) < carPhysics.maxSpeed);
+    const brakingPressed = keys.s || touchState.brake || keys.space;
+    const rpmValue = parseInt(document.getElementById("rpmValue")?.innerText || "1200", 10);
+    updateEngineSound(rpmValue, throttlePressed, brakingPressed);
+
 
 
     // Sync engine calculation output to SDF matrix parameters
