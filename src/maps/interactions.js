@@ -160,6 +160,53 @@ export function initMapInteractions(scene, mapId) {
 
     state.checkpoints = archIndices.map(pathIdx => path[pathIdx]);
   }
+
+  // ───── 🪙 procedurally Spawn golden spinning coins ─────
+  state.coins = [];
+  const coinMat = new BABYLON.StandardMaterial("coinMat", scene);
+  coinMat.emissiveColor = new BABYLON.Color3(1.0, 0.82, 0.0); // Gold glow
+  coinMat.disableLighting = true;
+
+  const coinPositions = [];
+  if (mapId === "race1") {
+    // Spawn 15 coins evenly distributed along the Catmull-Rom spline track path
+    const trackPoints = [
+      new BABYLON.Vector3(0, 0.05, 45),
+      new BABYLON.Vector3(35, 0.05, 35),
+      new BABYLON.Vector3(65, 0.05, -10),
+      new BABYLON.Vector3(40, 0.05, -55),
+      new BABYLON.Vector3(0, 0.05, -68),
+      new BABYLON.Vector3(-45, 0.05, -55),
+      new BABYLON.Vector3(-65, 0.05, -10),
+      new BABYLON.Vector3(-35, 0.05, 35)
+    ];
+    const catmullRom = BABYLON.Curve3.CreateCatmullRomSpline(trackPoints, 24, true);
+    const trackPath = catmullRom.getPoints();
+
+    for (let i = 0; i < 15; i++) {
+      const stepIdx = Math.floor((trackPath.length / 15) * i) % trackPath.length;
+      const pos = trackPath[stepIdx].clone();
+      pos.y = 0.45; // float slightly above pavement
+      coinPositions.push(pos);
+    }
+  } else {
+    // Scatter 15 coins randomly centered on free-drive grids (Tokyo/Outpost/Nebula)
+    for (let i = 0; i < 15; i++) {
+      const rx = (Math.random() - 0.5) * 110;
+      const rz = (Math.random() - 0.5) * 110;
+      coinPositions.push(new BABYLON.Vector3(rx, 0.45, rz));
+    }
+  }
+
+  // Create Babylon cylinder thin cylinders to represent flat coins
+  coinPositions.forEach((pos, idx) => {
+    const coin = BABYLON.MeshBuilder.CreateCylinder("coin_" + idx, { height: 0.05, diameter: 0.75 }, scene);
+    coin.position.copyFrom(pos);
+    coin.rotation.x = Math.PI / 2; // vertical disc
+    coin.material = coinMat;
+    state.coins.push(coin);
+    scene.customData.mapMeshes.push(coin); // autosweeps during switchMap
+  });
 }
 
 /**
@@ -284,6 +331,32 @@ export function updateMapInteractions(scene, dt, timeElapsed) {
       state.screenFlash = 0.9; // Massive violet warp flash
       showToast("🌀 WARP DRIVE DETECTED: HYPER-SPACE DISPLACEMENT", "warp");
     }
+  }
+
+  // --- 3. SPIN AND PICK UP COLLISION COINS ---
+  if (state.coins) {
+    state.coins.forEach((coin, idx) => {
+      if (coin.isCollected) return;
+
+      // Spin the gold coin around its local vertical axis
+      coin.rotation.y += dt * 3.2;
+
+      // Float up and down slightly using a smooth sine wave
+      const floatOffset = Math.sin(timeElapsed * 4.5 + idx * 0.55) * 0.08;
+      coin.position.y = 0.45 + floatOffset;
+
+      // Measure distance to player car position
+      const dist = BABYLON.Vector3.Distance(carPos, coin.position);
+      if (dist < 1.7) {
+        coin.isCollected = true;
+        coin.setEnabled(false); // Make invisible and inactive
+
+        // Award 10 coins through global helper
+        if (window.addCoins) {
+          window.addCoins(10);
+        }
+      }
+    });
   }
 }
 

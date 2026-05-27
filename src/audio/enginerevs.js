@@ -92,9 +92,11 @@ export function initEngineSound() {
 
   try {
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    window.audioCtx = audioCtx;
 
     // Master output volume — THIS IS THE MAIN LOUDNESS KNOB
     masterGain = audioCtx.createGain();
+    window.masterGain = masterGain;
     masterGain.gain.setValueAtTime(1.0, audioCtx.currentTime);
     masterGain.connect(audioCtx.destination);
 
@@ -165,7 +167,7 @@ export function initEngineSound() {
     // Main signal chain: oscillators → distortion → LP → HP → panner → engine gain → master
     engineOsc1.connect(waveShaper);
     engineOsc2.connect(waveShaper);
-    
+
     // CRITICAL: Connect subOsc DIRECTLY to subGain and lpFilter, bypassing waveShaper!
     // Passing a clean sub-sine wave through a distortion node squares it and creates high-pitched buzz.
     // Bypassing distortion keeps the sub-bass completely pure, deep, and thundering.
@@ -206,10 +208,10 @@ export function updateEngineSound(rpm, isThrottlePressed, isBraking) {
     : "car";
 
   const steerAngle = carPhysics.steeringAngle || 0.0;
-  const rpmNorm = Math.min(1.0, rpm / 8000.0); // normalized 0–1
+  const rpmNorm = Math.min(1.0, rpm / 9999.0); // normalized 0–1 using high 9999 max
 
   // ===================================================================
-  //  VEHICLE-SPECIFIC LOW ENGINE RUMBLE PROFILES
+  //  VEHICLE-SPECIFIC HIGH ENGINE SCREAM & LFO SMOOTHING PROFILES
   // ===================================================================
   let baseFreq, detuning, osc1Type, osc2Type;
   let pistonRate, modDepth;
@@ -220,100 +222,135 @@ export function updateEngineSound(rpm, isThrottlePressed, isBraking) {
   let subVolume;
 
   if (type === "car_red") {
-    // ───── 🏎️ RED ACE: AGGRESSIVE RACING V10 RUMBLE ─────
-    baseFreq = 38 + rpmNorm * 90;         // deep, beastly V10 growl (38 Hz to 128 Hz)
-    detuning = 1.035;
+    // ───── 🏎️ RED ACE: AGGRESSIVE RACING V10 SCREAMER ─────
+    baseFreq = 38 + rpmNorm * 260;         // low beastly growl (38 Hz to 298 Hz)
+    detuning = 3.0;                       // "false high" harmonic: 3rd harmonic (octave + fifth)
     osc1Type = 'sawtooth';
-    osc2Type = 'sawtooth';                // thick double-saw growl
+    osc2Type = 'sawtooth';                // thick double-saw growl/scream
 
     pistonRate = 8 + rpmNorm * 25;        // fast cylinder pulsing
-    modDepth = 15 + rpmNorm * 35;
+    modDepth = 15 * (1.0 - rpmNorm * 0.82); // fade LFO throb so it merges into a solid scream at high RPM
 
-    tFreq = 400 + rpmNorm * 1200;         // subtle lower-pitched turbo whistle
-    tMaxVol = 0.025;
+    tFreq = 500 + rpmNorm * 1200;         // bright clean high-pitched turbo whine
+    tMaxVol = 0.04;
 
-    lpCutoff = 160 + rpmNorm * 480 + (isThrottlePressed ? 150 : 0); // highly rolled off
-    lpQ = 2.0 + Math.abs(steerAngle) * 2.0;
+    lpCutoff = 220 + rpmNorm * 1200 + (isThrottlePressed ? 400 : 0); // cut harsh super highs while letting false highs through
+    lpQ = 2.5 + Math.abs(steerAngle) * 2.0;
     hpCutoff = 14;
 
-    distortion = 22;
+    distortion = 16;                      // keep high-rpm scream clean and distinct
 
     idleVol = 0.28;
-    throttleVol = 0.95;                   // extremely loud V10 rumbling presence
+    throttleVol = 1.15;                   // extremely loud, screaming V10 presence
     brakeVol = 0.12;
-    subVolume = 0.45 + rpmNorm * 0.45;
+    subVolume = 0.5 + rpmNorm * 0.5;
 
   } else if (type === "truck") {
-    // ───── 🚛 SEMITRUCK: ULTRALOW VISCERAL DIESEL THROB ─────
-    baseFreq = 18 + rpmNorm * 32;         // throat-rattling low thrum (18 Hz to 50 Hz)
-    detuning = 0.985;
+    // ───── 🚛 SEMITRUCK: VISCERAL DIESEL RUMBLE & TURBO SPOOL ─────
+    baseFreq = 18 + rpmNorm * 90;          // deep diesel growl (18 Hz to 108 Hz)
+    detuning = 2.0;                       // "false high" harmonic: 2nd harmonic (octave above)
     osc1Type = 'sawtooth';
     osc2Type = 'sine';                    // sub-harmonic overlay
 
     pistonRate = 1.8 + rpmNorm * 6.0;     // heavy mechanical thuds
-    modDepth = 35 + rpmNorm * 45;
+    modDepth = 35 * (1.0 - rpmNorm * 0.55); // maintain heavy mechanical presence but smoother at speed
 
-    tFreq = 180 + rpmNorm * 450;
-    tMaxVol = 0.035;                      // low industrial turbine throb
+    tFreq = 220 + rpmNorm * 600;
+    tMaxVol = 0.05;                      // loud industrial turbine whine
 
-    lpCutoff = 65 + rpmNorm * 130 + (isThrottlePressed ? 30 : 0); // cuts out all high buzz
-    lpQ = 5.0 + Math.abs(steerAngle) * 5.0;
+    lpCutoff = 90 + rpmNorm * 400 + (isThrottlePressed ? 100 : 0); // deep but allows turbo to scream
+    lpQ = 4.0 + Math.abs(steerAngle) * 4.0;
     hpCutoff = 8;                         // full bass pass
 
-    distortion = 6;                       // soft saturation warmth
+    distortion = 6;                       // warm saturation
 
     idleVol = 0.45;                       // massive loud idling presence
-    throttleVol = 0.95;
+    throttleVol = 1.1;
     brakeVol = 0.18;
-    subVolume = 0.6 + rpmNorm * 0.5;
+    subVolume = 0.7 + rpmNorm * 0.5;
 
   } else if (type === "minitruck") {
-    // ───── 🛻 HANTU-RAYA: THROBBING OFFROAD V-TWIN ─────
-    baseFreq = 26 + rpmNorm * 65;         // heavy low V-Twin (26 Hz to 91 Hz)
-    detuning = 1.05;                      // heavily detuned uneven firing rhythm
+    // ───── 🛻 HANTU-RAYA: THROBBING OFFROAD V-TWIN SCREAM ─────
+    baseFreq = 30 + rpmNorm * 180;         // heavy low V-Twin up to mechanical scream (30 Hz to 210 Hz)
+    detuning = 4.0;                       // "false high" harmonic: 4th harmonic (two octaves above)
     osc1Type = 'triangle';                // raw steel frame resonant ring
     osc2Type = 'sawtooth';                // low pipe exhaust grind
 
-    pistonRate = 3.5 + rpmNorm * 15.0;    // slower uneven combustion pulses
-    modDepth = 22 + rpmNorm * 30;
+    pistonRate = 3.5 + rpmNorm * 15.0;    // combustion pulses
+    modDepth = 22 * (1.0 - rpmNorm * 0.75); // smooth out stutter at high RPM
 
-    tFreq = 250 + rpmNorm * 800;
-    tMaxVol = 0.012;                      // barely audible turbo on buggy
+    tFreq = 350 + rpmNorm * 1000;
+    tMaxVol = 0.02;                      // moderate turbo whine on buggy
 
-    lpCutoff = 110 + rpmNorm * 340 + (isThrottlePressed ? 80 : 0); // pure warm rumble
+    lpCutoff = 160 + rpmNorm * 800 + (isThrottlePressed ? 200 : 0); // warm rumble to high grit
     lpQ = 3.0 + Math.abs(steerAngle) * 4.0;
     hpCutoff = 10;
 
-    distortion = 20;
+    distortion = 18;
 
     idleVol = 0.26;
-    throttleVol = 0.85;
+    throttleVol = 1.0;
     brakeVol = 0.10;
-    subVolume = 0.45 + rpmNorm * 0.45;
+    subVolume = 0.5 + rpmNorm * 0.5;
 
   } else {
-    // ───── ⚡ SPORTS CAR: DEEP THICK CYBER V8 RUMBLE ─────
-    baseFreq = 34 + rpmNorm * 75;         // classic low V8 rumble (34 Hz to 109 Hz)
-    detuning = 1.02;
+    // ───── ⚡ SPORTS CAR: RACING V8 HARMONIC SCREAM ─────
+    baseFreq = 34 + rpmNorm * 200;         // classic low V8 rumble to roaring screaming V8 (34 Hz to 234 Hz)
+    detuning = 2.5;                       // "false high" harmonic: 2.5x detuned overlay
     osc1Type = 'sawtooth';
     osc2Type = 'triangle';
 
     pistonRate = 5.0 + rpmNorm * 20.0;
-    modDepth = 12 + rpmNorm * 25;
+    modDepth = 12 * (1.0 - rpmNorm * 0.85); // smooth LFO modulation at high RPM for pure screaming tone
 
-    tFreq = 350 + rpmNorm * 1100;
-    tMaxVol = 0.02;
+    tFreq = 400 + rpmNorm * 1000;
+    tMaxVol = 0.03;
 
-    lpCutoff = 130 + rpmNorm * 380 + (isThrottlePressed ? 100 : 0);
+    lpCutoff = 180 + rpmNorm * 900 + (isThrottlePressed ? 300 : 0); // opens up to 1380 Hz
     lpQ = 3.0 + Math.abs(steerAngle) * 3.0;
     hpCutoff = 12;
 
     distortion = 12;
 
     idleVol = 0.22;
-    throttleVol = 0.75;
+    throttleVol = 0.95;
     brakeVol = 0.08;
-    subVolume = 0.35 + rpmNorm * 0.45;
+    subVolume = 0.4 + rpmNorm * 0.5;
+  }
+
+  // Apply cams multiplier
+  if (window.highLiftCamsBought) {
+    baseFreq *= 1.15; // pitche up aggressive mechanic cam grind +15%
+  }
+
+  // ===================================================================
+  //  VOLUME CONTROLLER (LOUD AND PUNCHY)
+  // ===================================================================
+  let targetVol = idleVol;
+  if (isThrottlePressed) {
+    targetVol = throttleVol;
+  } else if (isBraking) {
+    targetVol = brakeVol;
+  }
+
+  // ===================================================================
+  //  IGNITION-CUT REV LIMITER (9950+ RPM)
+  // ===================================================================
+  let isRevLimiterActive = false;
+  if (rpm >= 9950) {
+    // 20 Hz ignition cut cycle (rapid shuttering sound)
+    const limitCycle = Math.floor(audioCtx.currentTime * 20) % 2;
+    if (limitCycle === 0) {
+      targetVol *= 0.05;   // Cut engine power dramatically
+      baseFreq *= 0.95;   // Pitches drop slightly when ignition is cut
+    }
+    isRevLimiterActive = true;
+
+    // Trigger random backfire pops while holding the rev limiter!
+    const popChance = window.racingExhaustBought ? 0.38 : 0.15;
+    if (Math.random() < popChance) {
+      triggerPop(audioCtx.currentTime, rpm, type);
+    }
   }
 
   // ===================================================================
@@ -349,15 +386,7 @@ export function updateEngineSound(rpm, isThrottlePressed, isBraking) {
   lpFilter.Q.setTargetAtTime(lpQ, audioCtx.currentTime, 0.06);
   hpFilter.frequency.setTargetAtTime(hpCutoff, audioCtx.currentTime, 0.08);
 
-  // ===================================================================
-  //  VOLUME CONTROLLER (LOUD AND PUNCHY)
-  // ===================================================================
-  let targetVol = idleVol;
-  if (isThrottlePressed) {
-    targetVol = throttleVol;
-  } else if (isBraking) {
-    targetVol = brakeVol;
-  }
+  // Apply modulated engine volume
   engineGain.gain.setTargetAtTime(targetVol, audioCtx.currentTime, 0.04);
 
   // ===================================================================
@@ -369,8 +398,12 @@ export function updateEngineSound(rpm, isThrottlePressed, isBraking) {
   // ===================================================================
   //  EXHAUST DEEP BACKFIRES ON THROTTLE LIFT-OFF
   // ===================================================================
-  if (wasThrottlePressed && !isThrottlePressed && rpm > 3200) {
-    const maxPops = type === "car_red" ? 7 : (type === "truck" ? 3 : 5);
+  const minPopRpm = window.racingExhaustBought ? 2000 : 3200;
+  if (wasThrottlePressed && !isThrottlePressed && rpm > minPopRpm) {
+    let maxPops = type === "car_red" ? 7 : (type === "truck" ? 3 : 5);
+    if (window.racingExhaustBought) {
+      maxPops += 6; // Extra pops from upgrades
+    }
     const numPops = 1 + Math.floor(Math.random() * maxPops);
     for (let i = 0; i < numPops; i++) {
       const delay = i * (0.04 + Math.random() * 0.08);
@@ -394,3 +427,38 @@ export function muteEngineSound() {
 export function getAudioStatus() {
   return isAudioEnabled;
 }
+
+export function playCoinSFX() {
+  if (!audioCtx) return;
+  const now = audioCtx.currentTime;
+
+  const osc1 = audioCtx.createOscillator();
+  const osc2 = audioCtx.createOscillator();
+  const gainNode = audioCtx.createGain();
+
+  osc1.type = 'sine';
+  osc2.type = 'sine';
+
+  // Chiptune double sweep pop
+  osc1.frequency.setValueAtTime(987.77, now); // B5
+  osc1.frequency.setValueAtTime(1318.51, now + 0.08); // E6
+
+  osc2.frequency.setValueAtTime(1975.54, now); // B6
+  osc2.frequency.setValueAtTime(2637.02, now + 0.08); // E7
+
+  gainNode.gain.setValueAtTime(0.0, now);
+  gainNode.gain.linearRampToValueAtTime(0.18, now + 0.02);
+  gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+
+  osc1.connect(gainNode);
+  osc2.connect(gainNode);
+  gainNode.connect(masterGain || audioCtx.destination);
+
+  osc1.start(now);
+  osc2.start(now);
+  osc1.stop(now + 0.4);
+  osc2.stop(now + 0.4);
+}
+
+// Bind to window for global pickups triggers accessibility
+window.playCoinSFX = playCoinSFX;

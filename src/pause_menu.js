@@ -199,21 +199,21 @@ export function initPauseMenu() {
   function buildCheckeredGrid() {
     const grid = document.getElementById("checkeredGrid");
     grid.innerHTML = "";
-    
+
     // Calculate cols/rows based on screen sizes
     const tileSize = 64; // size in pixels
     const cols = Math.ceil(window.innerWidth / tileSize);
     const rows = Math.ceil(window.innerHeight / tileSize);
-    
+
     grid.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
     grid.style.gridTemplateRows = `repeat(${rows}, 1fr)`;
-    
+
     const totalTiles = cols * rows;
     for (let i = 0; i < totalTiles; i++) {
       const tile = document.createElement("div");
       const colIdx = i % cols;
       const rowIdx = Math.floor(i / cols);
-      
+
       // Traditional alternate checkerboard classes
       const isLight = (colIdx + rowIdx) % 2 === 0;
       tile.className = `checker-box ${isLight ? "light" : ""}`;
@@ -227,22 +227,22 @@ export function initPauseMenu() {
   // --- RANDOM CHECKERED FLIPPING TRANSITION ---
   function startCheckersAnimation() {
     if (checkerInterval) clearInterval(checkerInterval);
-    
+
     const tiles = document.querySelectorAll(".checker-box");
     if (tiles.length === 0) return;
-    
+
     checkerInterval = setInterval(() => {
       // Pick 5 random tiles to animate
       for (let k = 0; k < 5; k++) {
         const randIdx = Math.floor(Math.random() * tiles.length);
         const tile = tiles[randIdx];
-        
+
         // Randomly assign a class: active white, orange, red, or return to baseline
         const randType = Math.random();
-        
+
         // Strip previous color classifications
         tile.classList.remove("white", "orange", "red", "flip");
-        
+
         if (randType < 0.15) {
           tile.classList.add("white");
         } else if (randType < 0.35) {
@@ -250,7 +250,7 @@ export function initPauseMenu() {
         } else if (randType < 0.45) {
           tile.classList.add("red");
         }
-        
+
         // Randomly flip 3D rotation
         if (Math.random() < 0.5) {
           tile.classList.add("flip");
@@ -292,11 +292,11 @@ export function initPauseMenu() {
     currentVehicle = vehicle;
     persistentGarageSelect.value = vehicle;
     mainGarageSelect.value = vehicle;
-    
+
     if (window.activeScene && typeof window.activeScene.switchVehicle === "function") {
       window.activeScene.switchVehicle(vehicle);
     }
-    
+
     hidePauseMenu();
   }
 
@@ -305,22 +305,22 @@ export function initPauseMenu() {
     currentMap = mapId;
     persistentMapSelect.value = mapId;
     mainMapSelect.value = mapId;
-    
+
     if (window.activeScene && typeof window.activeScene.switchMap === "function") {
       window.activeScene.switchMap(mapId);
     }
-    
+
     hidePauseMenu();
   }
 
   // --- EVENT ATTACHMENTS ---
   btnResume.addEventListener("click", hidePauseMenu);
   btnPersistentPause.addEventListener("click", togglePause);
-  
+
   persistentGarageSelect.addEventListener("change", (e) => {
     setVehicle(e.target.value);
   });
-  
+
   mainGarageSelect.addEventListener("change", (e) => {
     setVehicle(e.target.value);
   });
@@ -328,7 +328,7 @@ export function initPauseMenu() {
   persistentMapSelect.addEventListener("change", (e) => {
     setMap(e.target.value);
   });
-  
+
   mainMapSelect.addEventListener("change", (e) => {
     setMap(e.target.value);
   });

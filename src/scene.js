@@ -36,16 +36,16 @@ export function createScene(engine, canvas, initialCarPosition) {
 
   // Create Ground Floor Grid
   const ground = BABYLON.MeshBuilder.CreateGround("ground", { width: 1000, height: 1000 }, scene);
-  
+
   // Load high-fidelity seamless ground textures with WRAP repeat parameters
   const outpostTex = new BABYLON.Texture(outpostGroundImg, scene);
   outpostTex.wrapU = BABYLON.Texture.WRAP_ADDRESSMODE;
   outpostTex.wrapV = BABYLON.Texture.WRAP_ADDRESSMODE;
-  
+
   const tokyoTex = new BABYLON.Texture(tokyoGroundImg, scene);
   tokyoTex.wrapU = BABYLON.Texture.WRAP_ADDRESSMODE;
   tokyoTex.wrapV = BABYLON.Texture.WRAP_ADDRESSMODE;
-  
+
   const nebulaTex = new BABYLON.Texture(nebulaGroundImg, scene);
   nebulaTex.wrapU = BABYLON.Texture.WRAP_ADDRESSMODE;
   nebulaTex.wrapV = BABYLON.Texture.WRAP_ADDRESSMODE;
@@ -61,7 +61,7 @@ export function createScene(engine, canvas, initialCarPosition) {
     ],
     samplers: ["uOutpostTex", "uTokyoTex", "uNebulaTex"]
   });
-  
+
   groundMaterial.setFloat("uDayNight", 0.0);
   groundMaterial.setFloat("uMapTheme", 1.0);
   groundMaterial.setVector3("uHeadlightPosL", BABYLON.Vector3.Zero());
@@ -69,12 +69,12 @@ export function createScene(engine, canvas, initialCarPosition) {
   groundMaterial.setVector3("uHeadlightDir", new BABYLON.Vector3(0, -0.1, 1));
   groundMaterial.setFloat("uHeadlightLIntensity", 0.0);
   groundMaterial.setFloat("uHeadlightRIntensity", 0.0);
-  
+
   // Bind textures to the custom shader material samplers
   groundMaterial.setTexture("uOutpostTex", outpostTex);
   groundMaterial.setTexture("uTokyoTex", tokyoTex);
   groundMaterial.setTexture("uNebulaTex", nebulaTex);
-  
+
   ground.material = groundMaterial;
 
   // Create the SDF Car using the refactored module
@@ -132,7 +132,7 @@ export function createScene(engine, canvas, initialCarPosition) {
   pGrad.addColorStop(1, "rgba(255,255,255,0)");
   pCtx.fillStyle = pGrad;
   pCtx.fillRect(0, 0, 32, 32);
-  
+
   const pTexture = new BABYLON.DynamicTexture("pTex", particleCanvas, scene);
 
   // Setup tyre particle drift emitter
@@ -142,7 +142,7 @@ export function createScene(engine, canvas, initialCarPosition) {
   // Emit strictly around back wheel locations
   driftParticles.minEmitBox = new BABYLON.Vector3(-0.55, -0.2, -0.32);
   driftParticles.maxEmitBox = new BABYLON.Vector3(-0.45, -0.2, 0.32);
-  
+
   driftParticles.color1 = new BABYLON.Color4(1.0, 0.35, 0.0, 0.4);
   driftParticles.color2 = new BABYLON.Color4(1.0, 0.15, 0.0, 0.15);
   driftParticles.colorDead = new BABYLON.Color4(0.4, 0.2, 0.1, 0.0);
@@ -242,7 +242,7 @@ export function createScene(engine, canvas, initialCarPosition) {
     // 2. Load the target map and reset physical spawn coordinates
     const targetMap = mapId || "map1";
     scene.customData.activeMapId = targetMap;
-    
+
     if (targetMap === "map2") {
       loadMap2(scene);
       carPhysics.position.set(0, 0.26, 0);

@@ -1,5 +1,31 @@
 export const truckFragmentShader = `
 precision highp float;
+
+// --- COSMIC NOISE HELPERS ---
+float chash(float n) { return fract(sin(n) * 43758.5453123); }
+vec3 chash33(vec3 p) {
+    p = vec3(dot(p,vec3(127.1,311.7,74.7)), dot(p,vec3(269.5,183.3,246.1)), dot(p,vec3(113.5,271.9,124.6)));
+    return fract(sin(p) * 43758.5453123);
+}
+float cnoise3D(vec3 p) {
+    vec3 i = floor(p); vec3 f = fract(p);
+    f = f * f * (3.0 - 2.0 * f);
+    float n = i.x + i.y * 157.0 + 113.0 * i.z;
+    return mix(mix(mix(chash(n), chash(n+1.0), f.x), mix(chash(n+157.0), chash(n+158.0), f.x), f.y),
+               mix(mix(chash(n+113.0), chash(n+114.0), f.x), mix(chash(n+270.0), chash(n+271.0), f.x), f.y), f.z);
+}
+float cfbm(vec3 p) {
+    float v = 0.0, a = 0.5;
+    for (int i = 0; i < 5; i++) { v += a * cnoise3D(p); p = p * 2.0 + vec3(100.0); a *= 0.5; }
+    return v;
+}
+float cstarField(vec3 p, float density) {
+    vec3 cell = floor(p * density); vec3 local = fract(p * density) - 0.5;
+    vec3 rnd = chash33(cell); float dist = length(local - (rnd - 0.5));
+    float brightness = smoothstep(0.08, 0.0, dist);
+    float twinkle = sin(time * (3.0 + rnd.x * 12.0) + rnd.y * 6.28) * 0.5 + 0.5;
+    return brightness * twinkle * step(0.82, rnd.z);
+}
 varying vec3 vPosition;
 varying vec3 vWorldPos;
 varying vec3 vNormal;
@@ -216,11 +242,53 @@ vec3 shade(vec3 p, vec3 normal, vec3 rd, float id) {
     float spec = 0.0;
     float emission = 0.0;
 
-    if (id == 1.0) { // Candy Red Metallic Paint
-        color = vec3(0.72, 0.01, 0.05);
-        roughness = 0.1;
-        metallic = 0.85;
-        spec = 0.8;
+    if (id == 1.0) { // COSMIC PAINT
+        // Cosmic paint computation
+        float nd = max(dot(normal, -rd), 0.0);
+        float fr = pow(1.0 - nd, 3.0);
+        vec3 uvw = p * 1.5;
+        float t2 = time;
+
+        // Nebula layers
+        vec3 wp = vec3(uvw.x + sin(t2*0.3)*0.5*cnoise3D(uvw*1.5+t2*0.1), uvw.y + cos(t2*0.25)*0.5*cnoise3D(uvw*1.3-t2*0.15), uvw.z);
+        float neb1 = cfbm(wp * 1.2 + vec3(t2*0.05, 0.0, t2*0.03));
+        float neb2 = cfbm(wp * 0.8 - vec3(0.0, t2*0.04, t2*0.06));
+
+        // Galaxy spiral
+        float angle = atan(uvw.z, uvw.x);
+        float rad = length(uvw.xz);
+        float spiral = (sin(angle*3.0 - rad*4.0 + t2*0.4)*0.5+0.5) * smoothstep(0.0,1.5,rad) * smoothstep(4.0,1.0,rad);
+
+        // Stars & pulses
+        float stars = cstarField(p, 35.0)*1.5 + cstarField(p+vec3(7.3,3.1,11.7), 55.0)*0.8;
+        float pulse = pow((sin(p.x*8.0-t2*3.5)*0.5+0.5)*(sin(length(p.xz)*12.0-t2*4.0)*0.5+0.5), 3.0)*0.5;
+
+        // Iridescence
+        float iriShift = fr*6.283 + p.x*2.0 + p.z*1.5;
+        vec3 iri = vec3(sin(iriShift)*0.5+0.5, sin(iriShift+2.094)*0.5+0.5, sin(iriShift+4.189)*0.5+0.5);
+
+        // Aurora rim
+        float aurora = pow(fr, 2.0) * (sin(p.x*6.0+p.z*4.0+t2*2.0)*0.5+0.5) * (sin(p.z*8.0-t2*1.5)*0.5+0.5);
+
+        // Compose: deep crimson cosmos for truck
+        vec3 deep = vec3(0.03, 0.0, 0.01);
+        color = deep;
+        color = mix(color, vec3(0.75, 0.02, 0.08), neb1 * 0.55);
+        color = mix(color, vec3(0.5, 0.0, 0.6), neb2 * 0.4);
+        color = mix(color, vec3(1.0, 0.2, 0.4) * 0.6, spiral * 0.3);
+        color = mix(color, iri * 0.5, fr * 0.35);
+        color += vec3(1.0, 0.9, 0.8) * stars;
+        color += vec3(1.0, 0.15, 0.2) * pulse * 0.3;
+        color += vec3(1.0, 0.3, 0.6) * aurora * 1.0;
+        // Metallic flakes
+        float flake = pow(fract(sin(dot(p.xy*1200.0, vec2(12.9898,78.233)))*43758.5453), 22.0)*0.5;
+        color += vec3(1.0, 0.9, 0.8) * flake * (0.5 + fr*0.5);
+        color = mix(deep*0.5, color, nd*0.75+0.25);
+
+        roughness = 0.06;
+        metallic = 0.95;
+        spec = 1.0;
+        emission = 0.12;
     } else if (id == 2.0) { // Polished Chrome
         color = vec3(0.95, 0.95, 0.98);
         roughness = 0.02;

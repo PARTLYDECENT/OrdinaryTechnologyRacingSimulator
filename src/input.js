@@ -4,7 +4,9 @@ export const keys = {
   s: false,
   a: false,
   d: false,
-  space: false
+  space: false,
+  q: false,
+  e: false
 };
 
 export const touchState = {
@@ -32,6 +34,8 @@ export function initInput(onInputTriggered, onResetPhysics) {
     if (key === "arrowdown" || key === "s") { keys.s = true; triggered = true; }
     if (key === "arrowleft" || key === "a") { keys.a = true; triggered = true; }
     if (key === "arrowright" || key === "d") { keys.d = true; triggered = true; }
+    if (key === "q") { keys.q = true; triggered = true; }
+    if (key === "e") { keys.e = true; triggered = true; }
     if (e.code === "Space") { keys.space = true; triggered = true; }
     
     if (triggered && onInputTriggered) {
@@ -51,6 +55,8 @@ export function initInput(onInputTriggered, onResetPhysics) {
     if (key === "arrowdown" || key === "s") keys.s = false;
     if (key === "arrowleft" || key === "a") keys.a = false;
     if (key === "arrowright" || key === "d") keys.d = false;
+    if (key === "q") keys.q = false;
+    if (key === "e") keys.e = false;
     if (e.code === "Space") keys.space = false;
   });
 

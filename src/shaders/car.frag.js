@@ -40,7 +40,65 @@ float smin(float a, float b, float k) {
     return mix(b, a, h) - k * h * (1.0 - h);
 }
 
-// --- SCENE MAP FUNCTION ---
+// ============================================================
+// COSMIC NOISE SYSTEM
+// ============================================================
+float hash(float n) { return fract(sin(n) * 43758.5453123); }
+float hash21(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+vec3 hash33(vec3 p) {
+    p = vec3(dot(p,vec3(127.1,311.7,74.7)), dot(p,vec3(269.5,183.3,246.1)), dot(p,vec3(113.5,271.9,124.6)));
+    return fract(sin(p) * 43758.5453123);
+}
+
+float noise3D(vec3 p) {
+    vec3 i = floor(p);
+    vec3 f = fract(p);
+    f = f * f * (3.0 - 2.0 * f);
+    float n = i.x + i.y * 157.0 + 113.0 * i.z;
+    return mix(mix(mix(hash(n), hash(n+1.0), f.x),
+                   mix(hash(n+157.0), hash(n+158.0), f.x), f.y),
+               mix(mix(hash(n+113.0), hash(n+114.0), f.x),
+                   mix(hash(n+270.0), hash(n+271.0), f.x), f.y), f.z);
+}
+
+float fbm(vec3 p, int octaves) {
+    float v = 0.0, a = 0.5;
+    vec3 shift = vec3(100.0);
+    for (int i = 0; i < 6; i++) {
+        if (i >= octaves) break;
+        v += a * noise3D(p);
+        p = p * 2.0 + shift;
+        a *= 0.5;
+    }
+    return v;
+}
+
+// Swirling warp domain distortion for galaxy arms
+vec3 cosmicWarp(vec3 p, float t) {
+    float s = sin(t * 0.3) * 0.5;
+    float c = cos(t * 0.25) * 0.5;
+    return vec3(
+        p.x + s * noise3D(p * 1.5 + t * 0.1),
+        p.y + c * noise3D(p * 1.3 - t * 0.15),
+        p.z + s * c * noise3D(p * 1.7 + t * 0.08)
+    );
+}
+
+// Star sparkle field
+float starField(vec3 p, float density) {
+    vec3 cell = floor(p * density);
+    vec3 local = fract(p * density) - 0.5;
+    vec3 rnd = hash33(cell);
+    vec3 starPos = rnd - 0.5;
+    float dist = length(local - starPos);
+    float brightness = smoothstep(0.08, 0.0, dist);
+    float twinkle = sin(time * (3.0 + rnd.x * 12.0) + rnd.y * 6.28) * 0.5 + 0.5;
+    return brightness * twinkle * step(0.82, rnd.z);
+}
+
+// ============================================================
+// SCENE MAP FUNCTION (unchanged geometry)
+// ============================================================
 vec2 map(vec3 p) {
     vec2 res = vec2(1e10, 0.0);
     
@@ -48,51 +106,48 @@ vec2 map(vec3 p) {
     vec3 pBody = p;
     pBody.y -= sin(time * 60.0) * 0.0008;
     
-    // Aerodynamic wedge shape taper (Sleeker chassis)
+    // Aerodynamic wedge shape taper
     float taperX = 1.0 - (pBody.x + 0.85) * 0.16;
     vec3 pTaper = pBody;
     pTaper.z /= taperX;
     
-    // Main lower body shell (Low profile, aerodynamic wedge with sleeker rounding)
+    // Main lower body shell
     float bodyLower = sdRoundBox(pTaper - vec3(0.0, 0.04, 0.0), vec3(0.79, 0.03, 0.33), 0.14) * taperX;
     
-    // Active Front Splitter (Sporty carbon lip)
+    // Active Front Splitter
     float splitter = sdRoundBox(pBody - vec3(0.88, -0.06, 0.0), vec3(0.08, 0.015, 0.43), 0.02);
     bodyLower = min(bodyLower, splitter);
     
-    // Sleek side intakes (Supercar styling details)
+    // Side intakes
     float sideVent = sdBox(pBody - vec3(-0.15, 0.05, 0.40), vec3(0.18, 0.06, 0.06));
     bodyLower = max(bodyLower, -sideVent);
     
-    // Low-slung Cockpit Canopy (Highly aerodynamic windshield rake with smooth curves)
+    // Cockpit Canopy
     vec3 pCabin = pBody - vec3(-0.05, 0.20, 0.0);
-    pCabin.x += pCabin.y * 0.65; // Aggressively slanted back
+    pCabin.x += pCabin.y * 0.65;
     float cabin = sdRoundBox(pCabin, vec3(0.32, 0.06, 0.22), 0.10);
     
-    // Organic blend between lower body and canopy
     float bodyCombined = smin(bodyLower, cabin, 0.12);
     
-    // Wheel axle parameters: Front=0.52, Rear=-0.52, Z=0.32 (moved closer by 0.1), Wheel center Y=-0.04
+    // Wheel wells
     vec3 pWheelF = p; 
     pWheelF.x = abs(pWheelF.x) - 0.52;
     pWheelF.z = abs(pWheelF.z) - 0.32;
     vec3 pW = pWheelF - vec3(0.0, -0.04, 0.0);
     
-    // Scale wheels to be 0.3 smaller (0.7 scale factor)
     float wheelScale = 0.7;
     vec3 pW_scaled = pW / wheelScale;
     
-    // Cut out wheel wells from body shell
     float wheelWell = sdCylinderZ(pW_scaled, 0.15, 0.25) * wheelScale;
     bodyCombined = max(bodyCombined, -wheelWell);
     
-    res = vec2(bodyCombined, 1.0); // ID 1: Fire/Molten Sports Paint
+    res = vec2(bodyCombined, 1.0); // ID 1: Cosmic Paint
     
-    // Rear carbon diffuser & undercarriage trim
+    // Rear diffuser
     float diffuser = sdBox(pBody - vec3(-0.75, -0.06, 0.0), vec3(0.15, 0.04, 0.36));
-    res = opUnion(res, vec2(diffuser, 7.0)); // ID 7: Trim details
+    res = opUnion(res, vec2(diffuser, 7.0));
     
-    // Wheel transformation logic (separating front steer from back wheels)
+    // Wheels
     vec3 pW_steered = pW_scaled;
     bool isFront = (p.x > 0.0);
     float steerSign = (p.z > 0.0) ? 1.0 : -1.0;
@@ -104,25 +159,24 @@ vec2 map(vec3 p) {
         pW_steered.xz = rotY * pW_steered.xz;
     }
     
-    // Apply continuous rolling rotation around axle
     float sSp = sin(uWheelRotation);
     float cSp = cos(uWheelRotation);
     mat2 rotZ = mat2(cSp, -sSp, sSp, cSp);
     vec3 pW_spinned = pW_steered;
     pW_spinned.xy = rotZ * pW_spinned.xy;
     
-    // Low-Profile Sport Tire
+    // Tire
     float tireTread = sdCylinderZ(pW_spinned, 0.12, 0.21) * wheelScale;
-    res = opUnion(res, vec2(tireTread, 2.0)); // ID 2: Tire Rubber
+    res = opUnion(res, vec2(tireTread, 2.0));
     
-    // Deep-dish sport rim outer barrel
+    // Rim
     float rimHub = sdCylinderZ(pW_spinned, 0.13, 0.15) * wheelScale;
-    res = opUnion(res, vec2(rimHub, 6.0)); // ID 6: Metallic Rims
+    res = opUnion(res, vec2(rimHub, 6.0));
     
-    // 7-Spoke Performance Radial Pattern
+    // Spokes
     float spokes = 1e10;
     for (int i = 0; i < 7; i++) {
-        float ang = float(i) * 0.89759; // 2 * PI / 7
+        float ang = float(i) * 0.89759;
         float s = sin(ang), c = cos(ang);
         vec2 rPos = mat2(c, -s, s, c) * pW_spinned.xy;
         float spoke = sdBox(vec3(rPos, pW_spinned.z), vec3(0.015, 0.15, 0.12)) * wheelScale;
@@ -131,21 +185,21 @@ vec2 map(vec3 p) {
     spokes = max(spokes, sdCylinderZ(pW_spinned, 0.125, 0.195) * wheelScale);
     res = opUnion(res, vec2(spokes, 6.0));
     
-    // Sleek aerodynamic window panels (re-project canopy shape slightly smaller and smoother)
+    // Windows
     float winBox = sdRoundBox(pCabin - vec3(0.0, 0.01, 0.0), vec3(0.30, 0.05, 0.20), 0.09);
     float winFeature = max(winBox, cabin + 0.003);
-    res = opUnion(res, vec2(winFeature, 3.0)); // ID 3: Glass Windows
+    res = opUnion(res, vec2(winFeature, 3.0));
     
-    // Aggressive laser headlights
+    // Headlights
     float hlL = length(pBody - vec3(0.90, 0.04, 0.24)) - 0.04;
     float hlR = length(pBody - vec3(0.90, 0.04, -0.24)) - 0.04;
-    res = opUnion(res, vec2(min(hlL, hlR), 4.0)); // ID 4: Headlights
+    res = opUnion(res, vec2(min(hlL, hlR), 4.0));
     
-    // Cohesive glowing rear taillight bar
+    // Taillights
     float tailBar = sdBox(pBody - vec3(-0.92, 0.07, 0.0), vec3(0.01, 0.018, 0.32));
-    res = opUnion(res, vec2(tailBar, 5.0)); // ID 5: Taillights
+    res = opUnion(res, vec2(tailBar, 5.0));
     
-    // Integrated sports rear wing with curved endplates
+    // Rear wing
     float wingLeft = sdBox(pBody - vec3(-0.78, 0.22, 0.32), vec3(0.02, 0.08, 0.02));
     float wingRight = sdBox(pBody - vec3(-0.78, 0.22, -0.32), vec3(0.02, 0.08, 0.02));
     float wingTop = sdBox(pBody - vec3(-0.84, 0.30, 0.0), vec3(0.05, 0.012, 0.44));
@@ -181,63 +235,134 @@ vec3 calcNormal(vec3 p) {
                      k.xxx * map(p + k.xxx * h).x);
 }
 
-// Evolved Red & Orange Fire-Slick paint shader
-vec3 getFirePaintColor(vec3 p, vec3 n, vec3 rd) {
+// ============================================================
+// COSMIC PAINT SYSTEM
+// ============================================================
+vec3 getCosmicPaintColor(vec3 p, vec3 n, vec3 rd) {
     float nd = max(dot(n, -rd), 0.0);
-    float fr = pow(1.0 - nd, 2.5); // Fresnel coefficient
-    
-    // Deep rich cherry candy red at direct angles, morphing to bright liquid orange & golden reflections at angles
-    vec3 baseRed = vec3(0.85, 0.0, 0.02);
-    vec3 midOrange = vec3(1.0, 0.28, 0.0);
-    vec3 edgeGold = vec3(1.0, 0.65, 0.0);
-    
-    vec3 paintColor;
-    vec3 neonGlow;
-    
-    // Dual central racing stripes over the hood and canopy
+    float fr = pow(1.0 - nd, 3.0); // Fresnel
+
+    // UV-like coordinates across body surface
+    vec3 uvw = p * 2.5;
+    float t = time;
+
+    // === LAYER 1: Deep space base with animated nebula ===
+    vec3 warpedP = cosmicWarp(uvw, t);
+    float nebula1 = fbm(warpedP * 1.2 + vec3(t * 0.05, 0.0, t * 0.03), 5);
+    float nebula2 = fbm(warpedP * 0.8 - vec3(0.0, t * 0.04, t * 0.06), 4);
+    float nebula3 = fbm(uvw * 1.5 + vec3(t * 0.08, t * 0.02, 0.0), 3);
+
+    // === LAYER 2: Galaxy spiral arms ===
+    float angle = atan(uvw.z, uvw.x);
+    float radius = length(uvw.xz);
+    float spiral = sin(angle * 3.0 - radius * 4.0 + t * 0.4) * 0.5 + 0.5;
+    spiral *= smoothstep(0.0, 1.5, radius) * smoothstep(4.0, 1.0, radius);
+    float spiralDetail = fbm(vec3(angle * 2.0, radius * 3.0, t * 0.1), 3);
+    spiral = spiral * 0.7 + spiralDetail * 0.3;
+
+    // === LAYER 3: Star field sparkles ===
+    float stars1 = starField(p, 40.0);
+    float stars2 = starField(p + vec3(7.3, 3.1, 11.7), 65.0);
+    float stars3 = starField(p + vec3(23.1, 17.5, 5.3), 100.0);
+    float totalStars = stars1 * 1.5 + stars2 * 0.8 + stars3 * 0.4;
+
+    // === LAYER 4: Energy pulse waves ===
+    float pulse1 = sin(p.x * 8.0 - t * 3.5) * 0.5 + 0.5;
+    float pulse2 = sin(length(p.xz) * 12.0 - t * 4.0) * 0.5 + 0.5;
+    float pulseWave = pow(pulse1 * pulse2, 3.0) * 0.6;
+
+    // === LAYER 5: Aurora rim effect at grazing angles ===
+    float aurora = pow(fr, 2.0);
+    float auroraWave = sin(p.x * 6.0 + p.z * 4.0 + t * 2.0) * 0.5 + 0.5;
+    auroraWave *= sin(p.z * 8.0 - t * 1.5) * 0.5 + 0.5;
+    aurora *= auroraWave;
+
+    // === COLOR PALETTES PER LIVERY ===
+    vec3 deepSpace, nebColor1, nebColor2, spiralColor, starColor, pulseColor, auroraColor, stripeColor;
+    float stripeIntensity = 0.0;
+
+    // Dual racing stripes
     float centerStripe = smoothstep(0.035, 0.045, abs(abs(p.z) - 0.07)) - smoothstep(0.0, 0.01, abs(abs(p.z) - 0.07));
     float hoodFocus = smoothstep(-0.8, 0.8, p.x) * smoothstep(0.0, 0.35, p.y);
-    
-    // Integrated flowing cyber-energy traces (racing pinstripes)
-    float stripes = abs(sin(p.z * 18.0)) * abs(sin(p.x * 2.0 - time * 3.0));
-    float lineIntensity = smoothstep(0.96, 0.99, stripes);
 
     if (uCarRedAce == 1.0) {
-        // Red Ace Livery: Hyper-vibrant racing crimson + crisp white central racing stripes + glowing white-gold pinstripes
-        baseRed = vec3(0.98, 0.005, 0.01);
-        midOrange = vec3(1.0, 0.08, 0.08);
-        edgeGold = vec3(1.0, 0.95, 0.88); // glowing platinum silver/gold
-        
-        paintColor = mix(baseRed, midOrange, fr);
-        paintColor = mix(paintColor, edgeGold, pow(fr, 4.0));
-        paintColor = mix(paintColor, vec3(0.98, 0.98, 1.0), centerStripe * hoodFocus * 0.92);
-        
-        neonGlow = vec3(1.0, 0.8, 0.25) * lineIntensity * 2.0;
+        // RED ACE: Crimson cosmos — red/magenta nebula with platinum stars
+        deepSpace = vec3(0.04, 0.0, 0.02);
+        nebColor1 = vec3(0.9, 0.05, 0.15);
+        nebColor2 = vec3(0.6, 0.0, 0.4);
+        spiralColor = vec3(1.0, 0.3, 0.5);
+        starColor = vec3(1.0, 0.95, 0.9);
+        pulseColor = vec3(1.0, 0.2, 0.3);
+        auroraColor = vec3(1.0, 0.4, 0.7);
+        stripeColor = vec3(0.98, 0.95, 1.0);
+        stripeIntensity = centerStripe * hoodFocus * 0.9;
     } else if (uCarRedAce == 2.0) {
-        // Gold/Orange Livery (NPC Opponent): Deep carbon stealth black + vibrant gold central stripes + hot orange/gold energy traces
-        baseRed = vec3(0.01, 0.01, 0.01); // carbon black
-        midOrange = vec3(0.05, 0.05, 0.06);
-        edgeGold = vec3(1.0, 0.62, 0.0); // rich cyber gold
-        
-        paintColor = mix(baseRed, midOrange, fr);
-        paintColor = mix(paintColor, edgeGold, pow(fr, 3.0) * 0.4);
-        paintColor = mix(paintColor, vec3(1.0, 0.72, 0.0), centerStripe * hoodFocus * 0.85);
-        
-        neonGlow = vec3(1.0, 0.45, 0.0) * lineIntensity * 1.8;
+        // NPC: Dark void cosmos — gold/cyan nebula on deep black
+        deepSpace = vec3(0.01, 0.01, 0.02);
+        nebColor1 = vec3(0.0, 0.6, 0.8);
+        nebColor2 = vec3(1.0, 0.65, 0.0);
+        spiralColor = vec3(0.0, 0.8, 1.0);
+        starColor = vec3(1.0, 0.85, 0.5);
+        pulseColor = vec3(0.0, 0.7, 1.0);
+        auroraColor = vec3(0.0, 1.0, 0.8);
+        stripeColor = vec3(1.0, 0.72, 0.0);
+        stripeIntensity = centerStripe * hoodFocus * 0.8;
     } else {
-        paintColor = mix(baseRed, midOrange, fr);
-        paintColor = mix(paintColor, edgeGold, pow(fr, 2.0));
-        neonGlow = vec3(1.0, 0.35, 0.0) * lineIntensity * 1.5 + vec3(1.0, 0.12, 0.0) * centerStripe * hoodFocus * 1.3;
+        // DEFAULT: Deep violet/blue cosmos with orange/gold energy
+        deepSpace = vec3(0.02, 0.005, 0.04);
+        nebColor1 = vec3(0.8, 0.2, 0.0);
+        nebColor2 = vec3(0.3, 0.0, 0.8);
+        spiralColor = vec3(1.0, 0.5, 0.0);
+        starColor = vec3(1.0, 0.9, 0.7);
+        pulseColor = vec3(1.0, 0.4, 0.0);
+        auroraColor = vec3(0.5, 0.0, 1.0);
+        stripeColor = vec3(1.0, 0.6, 0.0);
+        stripeIntensity = centerStripe * hoodFocus * 0.7;
     }
-    
-    // Dark velvet undertones in shadow boundaries
-    paintColor = mix(vec3(0.12, 0.0, 0.0), paintColor, nd * 0.8 + 0.2);
-    
-    // Procedural metallic flake micro-sparkles
-    float flake = fract(sin(dot(p.xy * 950.0, vec2(12.9898, 78.233))) * 43758.5453);
-    vec3 flakeSparkle = vec3(pow(flake, 18.0) * 0.45) * edgeGold;
-    
-    return paintColor + flakeSparkle + neonGlow;
+
+    // === COMPOSITE ALL LAYERS ===
+    // Base: deep space void
+    vec3 paintColor = deepSpace;
+
+    // Nebula clouds
+    paintColor = mix(paintColor, nebColor1, nebula1 * 0.55);
+    paintColor = mix(paintColor, nebColor2, nebula2 * 0.45);
+    paintColor += nebColor1 * nebula3 * 0.15;
+
+    // Galaxy spiral arms
+    paintColor = mix(paintColor, spiralColor * 0.6, spiral * 0.35);
+
+    // Chromatic iridescence shift based on viewing angle
+    float iriShift = fr * 3.14159 * 2.0 + p.x * 2.0 + p.z * 1.5;
+    vec3 iridescence = vec3(
+        sin(iriShift) * 0.5 + 0.5,
+        sin(iriShift + 2.094) * 0.5 + 0.5,
+        sin(iriShift + 4.189) * 0.5 + 0.5
+    );
+    paintColor = mix(paintColor, iridescence * 0.5, fr * 0.4);
+
+    // Star sparkles
+    paintColor += starColor * totalStars;
+
+    // Energy pulses
+    paintColor += pulseColor * pulseWave * 0.3;
+
+    // Aurora rim glow
+    paintColor += auroraColor * aurora * 1.2;
+
+    // Racing stripes with cosmic glow
+    float stripeGlow = sin(p.x * 20.0 - t * 5.0) * 0.5 + 0.5;
+    paintColor = mix(paintColor, stripeColor * (1.0 + stripeGlow * 0.5), stripeIntensity);
+
+    // Metallic micro-flake sparkles in the clear coat
+    float flake = fract(sin(dot(p.xy * 1200.0, vec2(12.9898, 78.233))) * 43758.5453);
+    float flakeIntensity = pow(flake, 22.0) * 0.6;
+    paintColor += starColor * flakeIntensity * (0.5 + fr * 0.5);
+
+    // Shadow boundary darkening
+    paintColor = mix(deepSpace * 0.5, paintColor, nd * 0.75 + 0.25);
+
+    return paintColor;
 }
 
 // Shader Material shade model
@@ -247,10 +372,11 @@ vec3 shade(vec3 p, vec3 normal, vec3 rd, float id) {
     float metallic = 0.0;
     float emission = 0.0;
     
-    if (id == 1.0) { // EVOLVED FIRE PAINT
-        color = getFirePaintColor(p, normal, rd);
-        roughness = 0.08;
-        metallic = 0.95;
+    if (id == 1.0) { // COSMIC PAINT
+        color = getCosmicPaintColor(p, normal, rd);
+        roughness = 0.06;
+        metallic = 0.97;
+        emission = 0.15; // Subtle self-illumination for nebula glow
     } else if (id == 2.0) { // Tires
         color = vec3(0.12);
         roughness = 0.90;
@@ -297,7 +423,7 @@ vec3 shade(vec3 p, vec3 normal, vec3 rd, float id) {
     float spec = pow(max(dot(normal, halfDir), 0.0), mix(128.0, 16.0, roughness));
     vec3 specular = vec3(0.4) * spec * sh * (metallic * 0.8 + 0.2) * (uDayNight == 1.0 ? 1.0 : 0.25);
     
-    // Simulated environment sky reflection mapping
+    // Environment sky reflection
     vec3 reflectDir = reflect(rd, normal);
     vec3 reflectDirWorld = (world * vec4(reflectDir, 0.0)).xyz;
     vec3 skyReflectColor = vec3(0.0);

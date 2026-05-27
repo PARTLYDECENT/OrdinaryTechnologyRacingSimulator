@@ -1,3 +1,5 @@
+import { boughtUpgrades, transmissionState } from './ui.js';
+
 // Vehicle physics state
 export const carPhysics = {
   position: null, // Initialized dynamically in initPhysics
@@ -58,11 +60,22 @@ export function updatePhysics(dt, keys, touchState, autopilot, timeElapsed, carB
     if (keys.space) accelInput = 0.0; // Handbrake priority
   }
 
+  // 🛠️ Dynamic performance upgrade multipliers
+  let activeAcceleration = carPhysics.acceleration;
+  if (boughtUpgrades.turbo) {
+    activeAcceleration *= 1.20; // Stage 1 Turbo: +20% Acceleration
+  }
+
+  let activeMaxSpeed = carPhysics.maxSpeed;
+  if (boughtUpgrades.weight) {
+    activeMaxSpeed *= 1.15; // Weight Reduction: +15% Top Speed
+  }
+
   // Process forward speed
   if (accelInput > 0.1) {
-    carPhysics.velocity += carPhysics.acceleration * accelInput * dt;
+    carPhysics.velocity += activeAcceleration * accelInput * dt;
   } else if (accelInput < -0.1) {
-    carPhysics.velocity += carPhysics.acceleration * accelInput * dt;
+    carPhysics.velocity += activeAcceleration * accelInput * dt;
   } else {
     // Apply rolling friction drag
     const drag = carPhysics.velocity * carPhysics.friction * dt;
@@ -75,17 +88,34 @@ export function updatePhysics(dt, keys, touchState, autopilot, timeElapsed, carB
     carPhysics.velocity -= brakeFactor;
   }
 
+  // ⚙️ Calculate manual gear physical velocity limit
+  let maxForwardSpeed = activeMaxSpeed;
+  if (transmissionState.type === "MANUAL") {
+    const gear = transmissionState.gear;
+    if (gear === "R") {
+      maxForwardSpeed = activeMaxSpeed * 0.4;
+    } else if (gear === "P") {
+      maxForwardSpeed = 0.0;
+    } else {
+      // Manual Gear limits in MPH: 1: 22, 2: 44, 3: 68, 4: 92, 5: 114, 6: 130
+      // Velocity equivalent: MPH / 5.8
+      const speedLimits = { 1: 22, 2: 44, 3: 68, 4: 92, 5: 114, 6: 130 };
+      const gearLimitMph = speedLimits[gear] || 130;
+      maxForwardSpeed = Math.min(activeMaxSpeed, gearLimitMph / 5.8);
+    }
+  }
+
   // Clamp final speeds
   if (typeof BABYLON !== 'undefined') {
-    carPhysics.velocity = BABYLON.Scalar.Clamp(carPhysics.velocity, -carPhysics.maxSpeed * 0.4, carPhysics.maxSpeed);
+    carPhysics.velocity = BABYLON.Scalar.Clamp(carPhysics.velocity, -activeMaxSpeed * 0.4, maxForwardSpeed);
   } else {
-    carPhysics.velocity = Math.max(-carPhysics.maxSpeed * 0.4, Math.min(carPhysics.maxSpeed, carPhysics.velocity));
+    carPhysics.velocity = Math.max(-activeMaxSpeed * 0.4, Math.min(maxForwardSpeed, carPhysics.velocity));
   }
 
   // Process steering mechanics
   let targetSteer = steerInput * carPhysics.maxSteering;
   if (typeof BABYLON !== 'undefined') {
-    carPhysics.steeringAngle = BABYLON.Scalar.Lerp(carPhysics.steeringAngle, targetSteer, carPhysics.steeringSpeed * dt);
+    carPhysics.steeringAngle = BABYLON.Scalar.Clamp(BABYLON.Scalar.Lerp(carPhysics.steeringAngle, targetSteer, carPhysics.steeringSpeed * dt), -carPhysics.maxSteering, carPhysics.maxSteering);
   } else {
     carPhysics.steeringAngle = carPhysics.steeringAngle + (targetSteer - carPhysics.steeringAngle) * (carPhysics.steeringSpeed * dt);
   }
