@@ -63,14 +63,14 @@ export function loadWireframe2(scene, mapMeshes, mapObservers) {
 
     // Parent side fins to chest segments
     if (s === 1) {
-      const finL = BABYLON.MeshBuilder.CreateCylinder("finL", { tessellation: 3, height: 0.1, diameterTop: 2.2, diameterBottom: 0.1 }, scene);
+      const finL = BABYLON.MeshBuilder.CreateCylinder("finL", { tessellation: 9, height: 0.1, diameterTop: 2.2, diameterBottom: 0.1 }, scene);
       finL.position.set(-1.4, 0, 0);
       finL.rotation.set(0, Math.PI / 4, Math.PI / 3);
       finL.material = koiMat;
       finL.parent = segment;
       mapMeshes.push(finL);
 
-      const finR = BABYLON.MeshBuilder.CreateCylinder("finR", { tessellation: 3, height: 0.1, diameterTop: 2.2, diameterBottom: 0.1 }, scene);
+      const finR = BABYLON.MeshBuilder.CreateCylinder("finR", { tessellation: 9, height: 0.1, diameterTop: 2.2, diameterBottom: 0.1 }, scene);
       finR.position.set(1.4, 0, 0);
       finR.rotation.set(0, -Math.PI / 4, -Math.PI / 3);
       finR.material = koiMat;
@@ -134,7 +134,7 @@ export function loadWireframe2(scene, mapMeshes, mapObservers) {
       arm.parent = craneHub;
       mapMeshes.push(arm);
 
-      const hoistLine = BABYLON.MeshBuilder.CreateCylinder("hoist" + idx, { tessellation: 3, height: 2.0, diameterTop: 0.02, diameterBottom: 0.02 }, scene);
+      const hoistLine = BABYLON.MeshBuilder.CreateCylinder("hoist" + idx, { tessellation: 9, height: 2.0, diameterTop: 0.02, diameterBottom: 0.02 }, scene);
       hoistLine.position.set(0, -0.6, 2.8);
       hoistLine.material = useMat;
       hoistLine.parent = craneHub;
@@ -161,7 +161,7 @@ export function loadWireframe2(scene, mapMeshes, mapObservers) {
     parentNode.position.set(data.x, data.y, data.z);
 
     // Support Mast
-    const mast = BABYLON.MeshBuilder.CreateCylinder("bbMast" + idx, { tessellation: 4, height: 12.0, diameterTop: 0.2, diameterBottom: 0.8 }, scene);
+    const mast = BABYLON.MeshBuilder.CreateCylinder("bbMast" + idx, { tessellation: 12, height: 12.0, diameterTop: 0.2, diameterBottom: 0.8 }, scene);
     mast.position.y = -6.0;
     mast.material = magentaMat;
     mast.parent = parentNode;
@@ -186,13 +186,13 @@ export function loadWireframe2(scene, mapMeshes, mapObservers) {
   const highwayContainer = new BABYLON.TransformNode("highwayDec", scene);
   highwayContainer.position.set(0, 10, 0);
 
-  const pathMesh = BABYLON.MeshBuilder.CreateCylinder("highwayRing", { tessellation: 24, height: 0.2, diameterTop: 90, diameterBottom: 90 }, scene);
+  const pathMesh = BABYLON.MeshBuilder.CreateCylinder("highwayRing", { tessellation: 72, height: 0.2, diameterTop: 90, diameterBottom: 90 }, scene);
   pathMesh.material = cyanMat;
   pathMesh.parent = highwayContainer;
   mapMeshes.push(pathMesh);
 
   for (let i = 0; i < 6; i++) {
-    const pulse = BABYLON.MeshBuilder.CreateSphere("traffic" + i, { segments: 4, diameter: 0.5 }, scene);
+    const pulse = BABYLON.MeshBuilder.CreateSphere("traffic" + i, { segments: 12, diameter: 0.5 }, scene);
     pulse.material = trafficMat;
     pulse.parent = highwayContainer;
     mapMeshes.push(pulse);

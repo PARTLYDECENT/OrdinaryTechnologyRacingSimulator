@@ -107,6 +107,58 @@ export function initMapInteractions(scene, mapId) {
     };
     
     scene.customData.mapMeshes.push(outerRing, innerCore);
+  } else if (mapId === "race1") {
+    // Generate the exact same spline curve coordinates
+    const trackPoints = [
+      new BABYLON.Vector3(0, 0.05, 45),
+      new BABYLON.Vector3(35, 0.05, 35),
+      new BABYLON.Vector3(65, 0.05, -10),
+      new BABYLON.Vector3(40, 0.05, -55),
+      new BABYLON.Vector3(0, 0.05, -68),
+      new BABYLON.Vector3(-45, 0.05, -55),
+      new BABYLON.Vector3(-65, 0.05, -10),
+      new BABYLON.Vector3(-35, 0.05, 35)
+    ];
+
+    const catmullRom = BABYLON.Curve3.CreateCatmullRomSpline(trackPoints, 24, true);
+    const path = catmullRom.getPoints();
+
+    // 1. Spawning 4 glowing Neon Green Boost Pads exactly along the track center
+    const boostIndices = [
+      Math.floor(path.length * 0.125),
+      Math.floor(path.length * 0.375),
+      Math.floor(path.length * 0.625),
+      Math.floor(path.length * 0.875)
+    ];
+
+    const boostMat = new BABYLON.StandardMaterial("boostPadMatRace", scene);
+    boostMat.emissiveColor = new BABYLON.Color3(0.0, 1.0, 0.45); // Neon Green
+    boostMat.disableLighting = true;
+
+    boostIndices.forEach((pathIdx, idx) => {
+      const pos = path[pathIdx];
+      const nextPos = path[(pathIdx + 1) % path.length];
+      const tangent = nextPos.subtract(pos).normalize();
+      const angle = Math.atan2(tangent.x, tangent.z);
+
+      const pad = BABYLON.MeshBuilder.CreateBox("boostPad_" + idx, { width: 4.5, height: 0.04, depth: 3.5 }, scene);
+      pad.position.copyFrom(pos);
+      pad.position.y = 0.06; // sit slightly above ribbon pavement
+      pad.rotation.y = angle;
+      pad.material = boostMat;
+      state.boostPads.push(pad);
+      scene.customData.mapMeshes.push(pad);
+    });
+
+    // 2. Setup the 4 checkpoint detection triggers matching visual gates
+    const archIndices = [
+      0,
+      Math.floor(path.length * 0.25),
+      Math.floor(path.length * 0.50),
+      Math.floor(path.length * 0.75)
+    ];
+
+    state.checkpoints = archIndices.map(pathIdx => path[pathIdx]);
   }
 }
 
@@ -142,7 +194,7 @@ export function updateMapInteractions(scene, dt, timeElapsed) {
     }
   }
   
-  if (state.mapId === "map1") {
+  if (state.mapId === "map1" || state.mapId === "race1") {
     // A. TEST BOOST PAD TRIGGER
     state.boostPads.forEach((pad, idx) => {
       const dist = BABYLON.Vector3.Distance(carPos, pad.position);
@@ -151,34 +203,41 @@ export function updateMapInteractions(scene, dt, timeElapsed) {
         state.boostTimer = 2.0; // Speed duration seconds
         showToast("🚀 BOOST SECTOR ENGAGED! +160% THRUST", "boost");
         
-        // Morph tire smoke particles to brilliant neon blue
+        // Morph tire smoke particles to brilliant neon blue/green!
         const p = scene.customData.driftParticles;
         if (p) {
-          p.color1 = new BABYLON.Color4(0.0, 0.85, 1.0, 0.85);
-          p.color2 = new BABYLON.Color4(0.0, 0.45, 1.0, 0.4);
+          if (state.mapId === "race1") {
+            p.color1 = new BABYLON.Color4(0.0, 1.0, 0.45, 0.85); // Neon green boost smoke
+            p.color2 = new BABYLON.Color4(0.0, 0.5, 0.2, 0.4);
+          } else {
+            p.color1 = new BABYLON.Color4(0.0, 0.85, 1.0, 0.85);
+            p.color2 = new BABYLON.Color4(0.0, 0.45, 1.0, 0.4);
+          }
           p.emitRate = 220;
         }
       }
     });
     
-    // B. TEST HAZARD BARRICADES COLLISION
-    state.hazards.forEach((haz, idx) => {
-      const dist = BABYLON.Vector3.Distance(carPos, haz.position);
-      if (dist < 2.0) {
-        // Reverse vector bounceback recoil
-        carPhysics.velocity = -carPhysics.velocity * 0.45;
-        carPhysics.heading += 0.4 * (Math.random() > 0.5 ? 1.0 : -1.0);
-        
-        // Displacement nudge to prevent intersection traps
-        const pushDirection = carPos.subtract(haz.position).normalize().scale(0.85);
-        carPhysics.position.addInPlace(pushDirection);
-        
-        state.screenFlash = 0.55; // Screen pulse
-        showToast("⚠️ STRUCTURAL COLLISION! CHASSIS RECOIL", "hazard");
-      }
-    });
+    // B. TEST HAZARD BARRICADES COLLISION (Only on map1)
+    if (state.mapId === "map1") {
+      state.hazards.forEach((haz, idx) => {
+        const dist = BABYLON.Vector3.Distance(carPos, haz.position);
+        if (dist < 2.0) {
+          // Reverse vector bounceback recoil
+          carPhysics.velocity = -carPhysics.velocity * 0.45;
+          carPhysics.heading += 0.4 * (Math.random() > 0.5 ? 1.0 : -1.0);
+          
+          // Displacement nudge to prevent intersection traps
+          const pushDirection = carPos.subtract(haz.position).normalize().scale(0.85);
+          carPhysics.position.addInPlace(pushDirection);
+          
+          state.screenFlash = 0.55; // Screen pulse
+          showToast("⚠️ STRUCTURAL COLLISION! CHASSIS RECOIL", "hazard");
+        }
+      });
+    }
     
-  } else if (state.mapId === "map2") {
+  } else if (state.mapId === "map2" || state.mapId === "race1") {
     // A. TEST ARCH CHECKPOINT ENCOUNTERS
     state.checkpoints.forEach((pos, idx) => {
       if (state.passedCheckpoints[idx]) return;
@@ -187,11 +246,11 @@ export function updateMapInteractions(scene, dt, timeElapsed) {
       if (dist < 3.2) {
         state.passedCheckpoints[idx] = true;
         
-        // Visually toggle active gate neon colors to cyber cyan
+        // Visually toggle active gate neon colors to cyber cyan/green
         const lintel = scene.getMeshByName("topLintel" + idx);
         if (lintel) {
           const activeMat = new BABYLON.StandardMaterial("activeLintelMat_" + idx, scene);
-          activeMat.emissiveColor = new BABYLON.Color3(0.0, 0.85, 1.0);
+          activeMat.emissiveColor = state.mapId === "race1" ? new BABYLON.Color3(0.0, 1.0, 0.45) : new BABYLON.Color3(0.0, 0.85, 1.0);
           activeMat.disableLighting = true;
           lintel.material = activeMat;
           state.checkpoints[idx] = activeMat; // Track for disposal
@@ -199,7 +258,7 @@ export function updateMapInteractions(scene, dt, timeElapsed) {
         
         const passedCount = state.passedCheckpoints.filter(Boolean).length;
         if (passedCount === 4) {
-          showToast("🏆 GRID RUN COMPLETE! SYSTEM CALIBRATED", "success");
+          showToast(state.mapId === "race1" ? "🏆 RACE 1 COMPLETE! SYSTEM OVERCLOCKED" : "🏆 GRID RUN COMPLETE! SYSTEM CALIBRATED", "success");
           state.screenFlash = 0.5;
         } else {
           showToast(`✨ CHECKPOINT ${passedCount}/4 COMPLETED!`, "success");

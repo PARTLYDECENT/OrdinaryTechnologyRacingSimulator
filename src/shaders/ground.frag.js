@@ -21,12 +21,12 @@ uniform sampler2D uTokyoTex;
 uniform sampler2D uNebulaTex;
 
 void main() {
-    // Draw clean anti-aliased grid lines using standard derivatives
-    vec2 grid = abs(fract(vWorldPos.xz / 2.0 - 0.5) - 0.5) / fwidth(vWorldPos.xz / 2.0);
+    // Draw clean anti-aliased grid lines using standard derivatives (3x denser grid)
+    vec2 grid = abs(fract(vWorldPos.xz / 0.6666667 - 0.5) - 0.5) / fwidth(vWorldPos.xz / 0.6666667);
     float line = min(grid.x, grid.y);
     float color = 1.0 - min(line, 1.0);
     
-    vec2 majorGrid = abs(fract(vWorldPos.xz / 10.0 - 0.5) - 0.5) / fwidth(vWorldPos.xz / 10.0);
+    vec2 majorGrid = abs(fract(vWorldPos.xz / 3.3333333 - 0.5) - 0.5) / fwidth(vWorldPos.xz / 3.3333333);
     float majorLine = min(majorGrid.x, majorGrid.y);
     float majorColor = 1.0 - min(majorLine, 1.0);
     
@@ -47,6 +47,10 @@ void main() {
         // Space nebula theme: deep indigo sky / hot magenta-pink grid
         bgColor = vec3(0.02, 0.005, 0.04);
         gridColor = vec3(1.0, 0.0, 0.8) * finalGrid * 0.95 + vec3(0.5, 0.0, 0.8) * finalGrid * 0.35;
+    } else if (uMapTheme == 4.0) {
+        // Race 1 Cyber Track theme: Neon racing green / emerald grid
+        bgColor = vec3(0.0, 0.02, 0.01);
+        gridColor = vec3(0.0, 1.0, 0.45) * finalGrid * 0.95 + vec3(0.0, 0.5, 0.2) * finalGrid * 0.35;
     } else {
         // Baseline Cyberpunk Outpost theme
         if (uDayNight == 1.0) {
@@ -66,6 +70,8 @@ void main() {
         texColor = texture2D(uTokyoTex, tileUV).rgb;
     } else if (uMapTheme == 3.0) {
         texColor = texture2D(uNebulaTex, tileUV).rgb;
+    } else if (uMapTheme == 4.0) {
+        texColor = texture2D(uTokyoTex, tileUV).rgb; // Sleek modern racing pavement
     } else {
         texColor = texture2D(uOutpostTex, tileUV).rgb;
     }

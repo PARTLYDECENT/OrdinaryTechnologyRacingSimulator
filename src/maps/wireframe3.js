@@ -37,7 +37,7 @@ export function loadWireframe3(scene, mapMeshes, mapObservers) {
 
     // Ring 1 (Outer, Gold, spin on Y)
     const ringOut = BABYLON.MeshBuilder.CreateCylinder("ringOut" + idx, {
-      tessellation: 16,
+      tessellation: 48,
       height: 0.4,
       diameterTop: pos.size * 2,
       diameterBottom: pos.size * 2
@@ -49,7 +49,7 @@ export function loadWireframe3(scene, mapMeshes, mapObservers) {
 
     // Ring 2 (Middle, Magenta, spin on X)
     const ringMid = BABYLON.MeshBuilder.CreateCylinder("ringMid" + idx, {
-      tessellation: 14,
+      tessellation: 42,
       height: 0.3,
       diameterTop: pos.size * 1.6,
       diameterBottom: pos.size * 1.6
@@ -61,7 +61,7 @@ export function loadWireframe3(scene, mapMeshes, mapObservers) {
 
     // Ring 3 (Inner, Gold, spin on Z)
     const ringInn = BABYLON.MeshBuilder.CreateCylinder("ringInn" + idx, {
-      tessellation: 12,
+      tessellation: 36,
       height: 0.2,
       diameterTop: pos.size * 1.2,
       diameterBottom: pos.size * 1.2
@@ -72,7 +72,7 @@ export function loadWireframe3(scene, mapMeshes, mapObservers) {
     mapMeshes.push(ringInn);
 
     // Central Plasma Sphere
-    const plasma = BABYLON.MeshBuilder.CreateSphere("plasma" + idx, { segments: 6, diameter: pos.size * 0.5 }, scene);
+    const plasma = BABYLON.MeshBuilder.CreateSphere("plasma" + idx, { segments: 18, diameter: pos.size * 0.5 }, scene);
     plasma.material = plasmaMat;
     plasma.parent = parentNode;
     mapMeshes.push(plasma);
@@ -122,7 +122,7 @@ export function loadWireframe3(scene, mapMeshes, mapObservers) {
 
     corners.forEach((corner, cIdx) => {
       const rod = BABYLON.MeshBuilder.CreateCylinder("rod_" + idx + "_" + cIdx, {
-        tessellation: 3,
+        tessellation: 9,
         height: 1.0,
         diameterTop: 0.08,
         diameterBottom: 0.08
@@ -154,7 +154,7 @@ export function loadWireframe3(scene, mapMeshes, mapObservers) {
 
     // Harvester Satellite Ring
     const hubRing = BABYLON.MeshBuilder.CreateCylinder("hubRing" + idx, {
-      tessellation: 12,
+      tessellation: 36,
       height: 1.2,
       diameterTop: pos.size * 1.5,
       diameterBottom: pos.size * 1.5
@@ -175,7 +175,7 @@ export function loadWireframe3(scene, mapMeshes, mapObservers) {
 
     // Volumetric Harvester Laser Beam (Cylinder shooting down to the infinite road floor!)
     const beam = BABYLON.MeshBuilder.CreateCylinder("harvesterBeam" + idx, {
-      tessellation: 8,
+      tessellation: 24,
       height: 100.0, // long beam stretching down
       diameterTop: 1.8,
       diameterBottom: 4.5 // flares out at contact pool!
@@ -197,7 +197,7 @@ export function loadWireframe3(scene, mapMeshes, mapObservers) {
   const stationParent = new BABYLON.TransformNode("spaceStation", scene);
   stationParent.position.set(-20, 16, -70);
 
-  const hub = BABYLON.MeshBuilder.CreateCylinder("stationHub", { tessellation: 8, height: 8.0, diameterBottom: 2.0, diameterTop: 2.0 }, scene);
+  const hub = BABYLON.MeshBuilder.CreateCylinder("stationHub", { tessellation: 24, height: 8.0, diameterBottom: 2.0, diameterTop: 2.0 }, scene);
   hub.rotation.x = Math.PI / 2;
   hub.material = goldMat;
   hub.parent = stationParent;

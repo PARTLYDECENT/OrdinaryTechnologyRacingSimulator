@@ -38,7 +38,7 @@ export function loadWireframe1(scene, mapMeshes, mapObservers) {
 
     // Tripod Base Scaffolding
     const base = BABYLON.MeshBuilder.CreateCylinder("turretBase" + idx, {
-      tessellation: 3,
+      tessellation: 9,
       height: 3.5,
       diameterTop: 0.4,
       diameterBottom: 2.2
@@ -49,21 +49,21 @@ export function loadWireframe1(scene, mapMeshes, mapObservers) {
     mapMeshes.push(base);
 
     // Turret Head Node (holds barrels and swivels)
-    const head = BABYLON.MeshBuilder.CreateSphere("turretHead" + idx, { segments: 6, diameter: 1.2 }, scene);
+    const head = BABYLON.MeshBuilder.CreateSphere("turretHead" + idx, { segments: 18, diameter: 1.2 }, scene);
     head.position.y = 3.6;
     head.material = wireMat;
     head.parent = parentNode;
     mapMeshes.push(head);
 
     // Dual Gun Barrels
-    const barrelL = BABYLON.MeshBuilder.CreateCylinder("barrelL" + idx, { tessellation: 4, height: 1.8, diameterTop: 0.12, diameterBottom: 0.12 }, scene);
+    const barrelL = BABYLON.MeshBuilder.CreateCylinder("barrelL" + idx, { tessellation: 12, height: 1.8, diameterTop: 0.12, diameterBottom: 0.12 }, scene);
     barrelL.position.set(-0.35, 0, 0.7);
     barrelL.rotation.x = Math.PI / 2; // points forward
     barrelL.material = wireMat;
     barrelL.parent = head;
     mapMeshes.push(barrelL);
 
-    const barrelR = BABYLON.MeshBuilder.CreateCylinder("barrelR" + idx, { tessellation: 4, height: 1.8, diameterTop: 0.12, diameterBottom: 0.12 }, scene);
+    const barrelR = BABYLON.MeshBuilder.CreateCylinder("barrelR" + idx, { tessellation: 12, height: 1.8, diameterTop: 0.12, diameterBottom: 0.12 }, scene);
     barrelR.position.set(0.35, 0, 0.7);
     barrelR.rotation.x = Math.PI / 2;
     barrelR.material = wireMat;
@@ -71,7 +71,7 @@ export function loadWireframe1(scene, mapMeshes, mapObservers) {
     mapMeshes.push(barrelR);
 
     // Dynamic Target Tracking Laser Beam (a stretched cylinder)
-    const laser = BABYLON.MeshBuilder.CreateCylinder("trackingLaser" + idx, { tessellation: 3, height: 1.0, diameterTop: 0.04, diameterBottom: 0.04 }, scene);
+    const laser = BABYLON.MeshBuilder.CreateCylinder("trackingLaser" + idx, { tessellation: 9, height: 1.0, diameterTop: 0.04, diameterBottom: 0.04 }, scene);
     laser.material = laserMat;
     laser.parent = head;
     mapMeshes.push(laser);
@@ -95,7 +95,7 @@ export function loadWireframe1(scene, mapMeshes, mapObservers) {
 
     // High support mast
     const mast = BABYLON.MeshBuilder.CreateCylinder("turbineMast" + idx, {
-      tessellation: 4,
+      tessellation: 12,
       height: pos.height,
       diameterTop: 0.3,
       diameterBottom: 1.5
@@ -121,7 +121,7 @@ export function loadWireframe1(scene, mapMeshes, mapObservers) {
     for (let b = 0; b < 3; b++) {
       const angle = (b * Math.PI * 2) / 3;
       const blade = BABYLON.MeshBuilder.CreateCylinder("blade" + idx + "_" + b, {
-        tessellation: 3,
+        tessellation: 9,
         height: 6.5,
         diameterTop: 0.05,
         diameterBottom: 0.4
@@ -151,8 +151,8 @@ export function loadWireframe1(scene, mapMeshes, mapObservers) {
 
     // Main scaffold body
     const mast = BABYLON.MeshBuilder.CreateCylinder("towerMast" + idx, {
-      tessellation: 4,
-      subdivisions: 3,
+      tessellation: 12,
+      subdivisions: 9,
       height: pos.h,
       diameterTop: 0.6,
       diameterBottom: 2.5
@@ -198,7 +198,7 @@ export function loadWireframe1(scene, mapMeshes, mapObservers) {
 
       sags.forEach((ends, sIdx) => {
         const points = [];
-        const segments = 12;
+        const segments = 36;
         for (let s = 0; s <= segments; s++) {
           const ratio = s / segments;
           const x = BABYLON.Scalar.Lerp(ends.from.x, ends.to.x, ratio);
@@ -225,8 +225,8 @@ export function loadWireframe1(scene, mapMeshes, mapObservers) {
     parentNode.position.set(pos.x, 0, pos.z);
 
     const frame = BABYLON.MeshBuilder.CreateCylinder("derrickFrame" + idx, {
-      tessellation: 4,
-      subdivisions: 2,
+      tessellation: 12,
+      subdivisions: 6,
       height: pos.h,
       diameterTop: 0.8,
       diameterBottom: 3.5
@@ -237,7 +237,7 @@ export function loadWireframe1(scene, mapMeshes, mapObservers) {
     mapMeshes.push(frame);
 
     const core = BABYLON.MeshBuilder.CreateCylinder("derrickCore" + idx, {
-      tessellation: 6,
+      tessellation: 18,
       height: pos.h - 1.5,
       diameterTop: 0.5,
       diameterBottom: 0.5

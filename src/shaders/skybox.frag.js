@@ -166,9 +166,50 @@ void main() {
         
         // Bright shining stardust clusters
         float starVal = hash(floor(rd * 45.0));
-        if (starVal > 0.98 && rd.y > -0.1) {
-            float blink = 0.3 + 0.7 * sin(time * 2.2 + starVal * 250.0);
-            finalColor += vec3(1.0, 0.7, 1.0) * blink * 0.58;
+    } else if (uMapTheme == 4.0) {
+        // ==========================================
+        // --- MAP 4: RACE 1 (CYBER GRID TRACK) ---
+        // ==========================================
+        // Deep cyber forest green/midnight vertical backdrop gradient
+        vec3 bottomCol = vec3(0.0, 0.015, 0.008);
+        vec3 topCol = vec3(0.0, 0.003, 0.0015);
+        vec3 horizonCol = vec3(0.0, 1.0, 0.45); // vibrant racing green horizon bloom
+        
+        float horizonFade = smoothstep(-0.25, 0.35, rd.y);
+        vec3 grad = mix(bottomCol, topCol, horizonFade);
+        
+        // Low horizon atmospheric neon glow
+        float glow = pow(max(0.0, 1.0 - abs(rd.y)), 10.0);
+        finalColor = grad + horizonCol * glow * 0.48;
+        
+        // --- FLOATING DIGITAL BINARY DATA RAIN / STREAM CODES ---
+        if (rd.y > -0.05) {
+            float streamGrid = hash(floor(rd * vec3(120.0, 15.0, 120.0)));
+            if (streamGrid > 0.965) {
+                // Scroll down over time
+                float scroll = fract(-time * 1.8 + streamGrid * 100.0);
+                float alpha = smoothstep(0.0, 0.15, scroll) * smoothstep(1.0, 0.6, scroll);
+                finalColor += vec3(0.0, 1.0, 0.4) * alpha * 0.28;
+            }
+        }
+        
+        // --- 3D PERSPECTIVE VERTICAL CYBER GRID LINES ---
+        if (rd.y > 0.0 && rd.y < 0.25) {
+            // Draw neat vertical cyan/green data pillars on the horizon
+            float pillars = sin(atan(rd.z, rd.x) * 60.0);
+            float pHeight = hash(vec3(floor(atan(rd.z, rd.x) * 12.0), 44.0, 0.0)) * 0.14 + 0.02;
+            if (pillars > 0.65 && rd.y < pHeight) {
+                float intensity = (1.0 - (rd.y / pHeight));
+                vec3 pillarCol = vec3(0.0, 0.95, 0.35);
+                finalColor = mix(finalColor, pillarCol, intensity * 0.35);
+            }
+        }
+        
+        // Vibrant neon green digital blinks
+        float starGrid = hash(floor(rd * 40.0));
+        if (starGrid > 0.985 && rd.y > -0.05) {
+            float blink = 0.5 + 0.5 * sin(time * 4.5 + starGrid * 150.0);
+            finalColor += vec3(0.0, 1.0, 0.4) * blink * 0.42;
         }
         
     } else {

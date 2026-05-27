@@ -1,9 +1,11 @@
 import { createCar } from './garage/car1.js';
 import { createTruck } from './garage/truck1.js';
+import { createMiniTruck } from './garage/minitruck.js';
 import { carPhysics } from './physics.js';
 import { loadMap1, cleanupMap1 } from './maps/map1.js';
 import { loadMap2, cleanupMap2 } from './maps/map2.js';
 import { loadMap3, cleanupMap3 } from './maps/map3.js';
+import { loadRace1, cleanupRace1 } from './maps/race1.js';
 import { createSkybox } from './maps/dynamicsky.js';
 import { initHeadlights, attachHeadlights } from './garage/headlights.js';
 import { initMapInteractions } from './maps/interactions.js';
@@ -82,6 +84,10 @@ export function createScene(engine, canvas, initialCarPosition) {
   const { carBox: truckBox, carMaterial: truckMaterial } = createTruck(scene, initialCarPosition);
   truckBox.setEnabled(false);
 
+  // Create the Exoskeletal Mini Truck (starts disabled)
+  const { carBox: minitruckBox, carMaterial: minitruckMaterial } = createMiniTruck(scene, initialCarPosition);
+  minitruckBox.setEnabled(false);
+
   // Initialize scene.customData structure first so the map loaders can populate it
   scene.customData = {
     carBox,
@@ -95,6 +101,8 @@ export function createScene(engine, canvas, initialCarPosition) {
     carMat: carMaterial,
     truckMesh: truckBox,
     truckMat: truckMaterial,
+    minitruckMesh: minitruckBox,
+    minitruckMat: minitruckMaterial,
     mapMeshes: [],
     skyboxMesh: null,
     skyboxMaterial: null,
@@ -151,28 +159,62 @@ export function createScene(engine, canvas, initialCarPosition) {
   // Link driftParticles back into scene.customData
   scene.customData.driftParticles = driftParticles;
 
-  // Helper to switch active drivable vehicle between car and truck
+  // Helper to switch active drivable vehicle between car, red ace, and truck
   scene.switchVehicle = (type) => {
     const data = scene.customData;
-    if (!data.carMesh || !data.truckMesh) return;
+    if (!data.carMesh || !data.truckMesh || !data.minitruckMesh) return;
 
-    let src = (type === "truck") ? data.carMesh : data.truckMesh;
-    let dst = (type === "truck") ? data.truckMesh : data.carMesh;
-    let dstMat = (type === "truck") ? data.truckMat : data.carMat;
+    let src = data.carBox;
+    let dst = data.carMesh;
+    let dstMat = data.carMat;
 
-    // Transfer transform coordinates
-    dst.position.copyFrom(src.position);
+    if (type === "truck") {
+      dst = data.truckMesh;
+      dstMat = data.truckMat;
+    } else if (type === "minitruck") {
+      dst = data.minitruckMesh;
+      dstMat = data.minitruckMat;
+    }
+
+    // Apply coordinate bounds and physics modifications
     if (type === "truck") {
       carPhysics.position.y = 0.62;
       carPhysics.radius = 0.30;
       data.driftParticles.minEmitBox.z = -0.44;
       data.driftParticles.maxEmitBox.z = 0.44;
+      carPhysics.maxSpeed = 16.0;
+      carPhysics.acceleration = 7.5;
+    } else if (type === "minitruck") {
+      carPhysics.position.y = 0.52;
+      carPhysics.radius = 0.28;
+      data.driftParticles.minEmitBox.z = -0.42;
+      data.driftParticles.maxEmitBox.z = 0.42;
+      carPhysics.maxSpeed = 24.0; // extremely quick off-road buggy
+      carPhysics.acceleration = 14.5;
     } else {
       carPhysics.position.y = 0.26;
       carPhysics.radius = 0.14;
       data.driftParticles.minEmitBox.z = -0.32;
       data.driftParticles.maxEmitBox.z = 0.32;
+
+      if (type === "car_red") {
+        // Red Ace: overclocked performance parameters and paint trigger
+        if (data.carMat && typeof data.carMat.setFloat === 'function') {
+          data.carMat.setFloat("uCarRedAce", 1.0);
+        }
+        carPhysics.maxSpeed = 32.0;
+        carPhysics.acceleration = 18.0;
+      } else {
+        // Standard Sports Car
+        if (data.carMat && typeof data.carMat.setFloat === 'function') {
+          data.carMat.setFloat("uCarRedAce", 0.0);
+        }
+        carPhysics.maxSpeed = 21.0;
+        carPhysics.acceleration = 12.0;
+      }
     }
+
+    dst.position.copyFrom(src.position);
     dst.rotation.copyFrom(src.rotation);
 
     // Swap visibility state
@@ -186,6 +228,7 @@ export function createScene(engine, canvas, initialCarPosition) {
     data.carBox = dst;
     data.carMaterial = dstMat;
     data.driftParticles.emitter = dst;
+    data.activeVehicleType = type; // Track active vehicle for audio engine profiles
   };
 
   // Helper to switch active map environment procedurally
@@ -194,16 +237,39 @@ export function createScene(engine, canvas, initialCarPosition) {
     cleanupMap1(scene);
     cleanupMap2(scene);
     cleanupMap3(scene);
+    cleanupRace1(scene);
 
-    // 2. Load the target map
+    // 2. Load the target map and reset physical spawn coordinates
     const targetMap = mapId || "map1";
     scene.customData.activeMapId = targetMap;
+    
     if (targetMap === "map2") {
       loadMap2(scene);
+      carPhysics.position.set(0, 0.26, 0);
+      carPhysics.velocity = 0.0;
+      carPhysics.heading = 0.0;
     } else if (targetMap === "map3") {
       loadMap3(scene);
+      carPhysics.position.set(0, 0.26, 0);
+      carPhysics.velocity = 0.0;
+      carPhysics.heading = 0.0;
+    } else if (targetMap === "race1") {
+      loadRace1(scene);
+      // Spawn player exactly on the racetrack start line, facing right down the curve!
+      carPhysics.position.set(0, 0.26, 45.0);
+      carPhysics.velocity = 0.0;
+      carPhysics.heading = -Math.PI / 2.3; // beautifully angled facing path[1]
     } else {
       loadMap1(scene);
+      carPhysics.position.set(0, 0.26, 0);
+      carPhysics.velocity = 0.0;
+      carPhysics.heading = 0.0;
+    }
+
+    // Sync physical coordinates directly to active mesh
+    if (scene.customData.carBox) {
+      scene.customData.carBox.position.copyFrom(carPhysics.position);
+      scene.customData.carBox.rotation.set(0, -carPhysics.heading, 0);
     }
 
     // 3. Re-initialize interactive elements

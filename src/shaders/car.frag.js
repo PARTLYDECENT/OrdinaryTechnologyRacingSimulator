@@ -13,6 +13,7 @@ uniform float uSteeringAngle;
 uniform vec3 uLightDir;
 uniform float uDayNight;
 uniform float time;
+uniform float uCarRedAce;
 
 // --- SDF PRIMITIVES ---
 float sdBox(vec3 p, vec3 b) {
@@ -33,6 +34,12 @@ vec2 opUnion(vec2 d1, vec2 d2) {
     return (d1.x < d2.x) ? d1 : d2;
 }
 
+// Polynomial smooth minimum for organic shape blending
+float smin(float a, float b, float k) {
+    float h = clamp(0.5 + 0.5 * (b - a) / k, 0.0, 1.0);
+    return mix(b, a, h) - k * h * (1.0 - h);
+}
+
 // --- SCENE MAP FUNCTION ---
 vec2 map(vec3 p) {
     vec2 res = vec2(1e10, 0.0);
@@ -46,8 +53,8 @@ vec2 map(vec3 p) {
     vec3 pTaper = pBody;
     pTaper.z /= taperX;
     
-    // Main lower body shell (Low profile, aerodynamic wedge)
-    float bodyLower = sdRoundBox(pTaper - vec3(0.0, 0.04, 0.0), vec3(0.85, 0.08, 0.39), 0.08) * taperX;
+    // Main lower body shell (Low profile, aerodynamic wedge with sleeker rounding)
+    float bodyLower = sdRoundBox(pTaper - vec3(0.0, 0.04, 0.0), vec3(0.79, 0.03, 0.33), 0.14) * taperX;
     
     // Active Front Splitter (Sporty carbon lip)
     float splitter = sdRoundBox(pBody - vec3(0.88, -0.06, 0.0), vec3(0.08, 0.015, 0.43), 0.02);
@@ -57,12 +64,13 @@ vec2 map(vec3 p) {
     float sideVent = sdBox(pBody - vec3(-0.15, 0.05, 0.40), vec3(0.18, 0.06, 0.06));
     bodyLower = max(bodyLower, -sideVent);
     
-    // Low-slung Cockpit Canopy (Highly aerodynamic windshield rake)
+    // Low-slung Cockpit Canopy (Highly aerodynamic windshield rake with smooth curves)
     vec3 pCabin = pBody - vec3(-0.05, 0.20, 0.0);
     pCabin.x += pCabin.y * 0.65; // Aggressively slanted back
-    float cabin = sdRoundBox(pCabin, vec3(0.38, 0.11, 0.28), 0.05);
+    float cabin = sdRoundBox(pCabin, vec3(0.32, 0.06, 0.22), 0.10);
     
-    float bodyCombined = min(bodyLower, cabin);
+    // Organic blend between lower body and canopy
+    float bodyCombined = smin(bodyLower, cabin, 0.12);
     
     // Wheel axle parameters: Front=0.52, Rear=-0.52, Z=0.32 (moved closer by 0.1), Wheel center Y=-0.04
     vec3 pWheelF = p; 
@@ -123,8 +131,8 @@ vec2 map(vec3 p) {
     spokes = max(spokes, sdCylinderZ(pW_spinned, 0.125, 0.195) * wheelScale);
     res = opUnion(res, vec2(spokes, 6.0));
     
-    // Sleek aerodynamic window panels (re-project canopy shape slightly smaller)
-    float winBox = sdRoundBox(pCabin - vec3(0.0, 0.01, 0.0), vec3(0.35, 0.10, 0.29), 0.04);
+    // Sleek aerodynamic window panels (re-project canopy shape slightly smaller and smoother)
+    float winBox = sdRoundBox(pCabin - vec3(0.0, 0.01, 0.0), vec3(0.30, 0.05, 0.20), 0.09);
     float winFeature = max(winBox, cabin + 0.003);
     res = opUnion(res, vec2(winFeature, 3.0)); // ID 3: Glass Windows
     
@@ -183,8 +191,44 @@ vec3 getFirePaintColor(vec3 p, vec3 n, vec3 rd) {
     vec3 midOrange = vec3(1.0, 0.28, 0.0);
     vec3 edgeGold = vec3(1.0, 0.65, 0.0);
     
-    vec3 paintColor = mix(baseRed, midOrange, fr);
-    paintColor = mix(paintColor, edgeGold, pow(fr, 2.0));
+    vec3 paintColor;
+    vec3 neonGlow;
+    
+    // Dual central racing stripes over the hood and canopy
+    float centerStripe = smoothstep(0.035, 0.045, abs(abs(p.z) - 0.07)) - smoothstep(0.0, 0.01, abs(abs(p.z) - 0.07));
+    float hoodFocus = smoothstep(-0.8, 0.8, p.x) * smoothstep(0.0, 0.35, p.y);
+    
+    // Integrated flowing cyber-energy traces (racing pinstripes)
+    float stripes = abs(sin(p.z * 18.0)) * abs(sin(p.x * 2.0 - time * 3.0));
+    float lineIntensity = smoothstep(0.96, 0.99, stripes);
+
+    if (uCarRedAce == 1.0) {
+        // Red Ace Livery: Hyper-vibrant racing crimson + crisp white central racing stripes + glowing white-gold pinstripes
+        baseRed = vec3(0.98, 0.005, 0.01);
+        midOrange = vec3(1.0, 0.08, 0.08);
+        edgeGold = vec3(1.0, 0.95, 0.88); // glowing platinum silver/gold
+        
+        paintColor = mix(baseRed, midOrange, fr);
+        paintColor = mix(paintColor, edgeGold, pow(fr, 4.0));
+        paintColor = mix(paintColor, vec3(0.98, 0.98, 1.0), centerStripe * hoodFocus * 0.92);
+        
+        neonGlow = vec3(1.0, 0.8, 0.25) * lineIntensity * 2.0;
+    } else if (uCarRedAce == 2.0) {
+        // Gold/Orange Livery (NPC Opponent): Deep carbon stealth black + vibrant gold central stripes + hot orange/gold energy traces
+        baseRed = vec3(0.01, 0.01, 0.01); // carbon black
+        midOrange = vec3(0.05, 0.05, 0.06);
+        edgeGold = vec3(1.0, 0.62, 0.0); // rich cyber gold
+        
+        paintColor = mix(baseRed, midOrange, fr);
+        paintColor = mix(paintColor, edgeGold, pow(fr, 3.0) * 0.4);
+        paintColor = mix(paintColor, vec3(1.0, 0.72, 0.0), centerStripe * hoodFocus * 0.85);
+        
+        neonGlow = vec3(1.0, 0.45, 0.0) * lineIntensity * 1.8;
+    } else {
+        paintColor = mix(baseRed, midOrange, fr);
+        paintColor = mix(paintColor, edgeGold, pow(fr, 2.0));
+        neonGlow = vec3(1.0, 0.35, 0.0) * lineIntensity * 1.5 + vec3(1.0, 0.12, 0.0) * centerStripe * hoodFocus * 1.3;
+    }
     
     // Dark velvet undertones in shadow boundaries
     paintColor = mix(vec3(0.12, 0.0, 0.0), paintColor, nd * 0.8 + 0.2);
@@ -192,16 +236,6 @@ vec3 getFirePaintColor(vec3 p, vec3 n, vec3 rd) {
     // Procedural metallic flake micro-sparkles
     float flake = fract(sin(dot(p.xy * 950.0, vec2(12.9898, 78.233))) * 43758.5453);
     vec3 flakeSparkle = vec3(pow(flake, 18.0) * 0.45) * edgeGold;
-    
-    // Integrated flowing cyber-energy traces (racing pinstripes)
-    float stripes = abs(sin(p.z * 18.0)) * abs(sin(p.x * 2.0 - time * 3.0));
-    float lineIntensity = smoothstep(0.96, 0.99, stripes);
-    
-    // Dual central racing stripes over the hood and canopy
-    float centerStripe = smoothstep(0.035, 0.045, abs(abs(p.z) - 0.07)) - smoothstep(0.0, 0.01, abs(abs(p.z) - 0.07));
-    float hoodFocus = smoothstep(-0.8, 0.8, p.x) * smoothstep(0.0, 0.35, p.y);
-    
-    vec3 neonGlow = vec3(1.0, 0.35, 0.0) * lineIntensity * 1.5 + vec3(1.0, 0.12, 0.0) * centerStripe * hoodFocus * 1.3;
     
     return paintColor + flakeSparkle + neonGlow;
 }

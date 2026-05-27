@@ -109,7 +109,9 @@ export function initPauseMenu() {
     <span class="text-gray-400 text-[10px] font-black uppercase tracking-widest font-mono">Bay:</span>
     <select id="persistentGarageSelect" class="bg-transparent border-none text-orange-400 font-extrabold uppercase text-[11px] tracking-wider focus:outline-none cursor-pointer font-mono hover:text-orange-300 transition-colors">
       <option value="car" class="bg-[#120808] text-white">⚡ Sports Car</option>
+      <option value="car_red" class="bg-[#120808] text-white">🏎️ Red Ace</option>
       <option value="truck" class="bg-[#120808] text-white">🚛 Semitruck</option>
+      <option value="minitruck" class="bg-[#120808] text-white">🛻 Mini Truck</option>
     </select>
     
     <div class="h-4 w-[1px] bg-orange-500/20 mx-1"></div>
@@ -119,6 +121,7 @@ export function initPauseMenu() {
       <option value="map1" class="bg-[#120808] text-white">🌋 Outpost</option>
       <option value="map2" class="bg-[#120808] text-white">🏙️ Neo Tokyo</option>
       <option value="map3" class="bg-[#120808] text-white">🌌 Space Nebula</option>
+      <option value="race1" class="bg-[#120808] text-white">🏁 Race 1</option>
     </select>
     
     <div class="h-4 w-[1px] bg-orange-500/20 mx-1"></div>
@@ -147,7 +150,9 @@ export function initPauseMenu() {
           <div class="relative">
             <select id="garageSelect" class="w-full bg-black/60 border border-orange-500/40 text-white rounded-xl px-4 py-3 text-xs font-bold uppercase tracking-wider focus:outline-none focus:border-orange-400 transition-colors duration-300 cursor-pointer appearance-none font-mono">
               <option value="car">⚡ SDF Ignis-Drive (Sports Car)</option>
+              <option value="car_red">🏎️ SDF Ignis-Drive (Red Ace Livery)</option>
               <option value="truck">🚛 SDF Semitruck (Heavy Rig)</option>
+              <option value="minitruck">🛻 Hantu-Raya Exoskeletal Concept (Mini Truck)</option>
             </select>
             <div class="absolute inset-y-0 right-4 flex items-center pointer-events-none text-orange-500 text-[10px]">
               ▼
@@ -162,6 +167,7 @@ export function initPauseMenu() {
               <option value="map1">🌋 Sector 1: Cyberpunk Outpost</option>
               <option value="map2">🏙️ Sector 2: Neo Tokyo Midnight</option>
               <option value="map3">🌌 Sector 3: Hyper-Space Nebula</option>
+              <option value="race1">🏁 Sector 4: Cyber Race 1</option>
             </select>
             <div class="absolute inset-y-0 right-4 flex items-center pointer-events-none text-orange-500 text-[10px]">
               ▼

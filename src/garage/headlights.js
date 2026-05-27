@@ -57,6 +57,13 @@ export function attachHeadlights(mesh, type) {
     // Lowered the trajectory a hair: angled downwards Y = -0.25 (was -0.15)
     leftLight.direction.set(1, -0.25, 0).normalize();
     rightLight.direction.set(1, -0.25, 0).normalize();
+  } else if (type === "minitruck") {
+    // Custom offsets for Hantu-Raya buggy exoskeletal nose bumper
+    leftLight.position.set(1.4, 0.12, -0.35);
+    rightLight.position.set(1.4, 0.12, 0.35);
+    
+    leftLight.direction.set(1, -0.22, 0).normalize();
+    rightLight.direction.set(1, -0.22, 0).normalize();
   } else {
     // Custom offsets for low-slung Sports Car dimensions (local +X forward, Z left/right spacing)
     leftLight.position.set(1.35, -0.14, -0.44);

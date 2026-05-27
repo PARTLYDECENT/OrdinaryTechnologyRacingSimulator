@@ -109,10 +109,15 @@ window.addEventListener('DOMContentLoaded', () => {
 
     // --- DAY/NIGHT TRANSITION LERP ---
     const currentDayNightVal = updateUI(dt, carPhysics.velocity);
+    const dynamicSunDir = BABYLON.Vector3.Lerp(new BABYLON.Vector3(0, -1, 0), uLightDirValue, currentDayNightVal).normalize();
     
     // Update shader uniforms
     data.carMaterial.setFloat("uDayNight", currentDayNightVal);
     data.groundMaterial.setFloat("uDayNight", currentDayNightVal);
+    
+    // Cache current environmental variables for secondary materials (like NPC car shaders)
+    data.dayNightVal = currentDayNightVal;
+    data.lightDir = dynamicSunDir;
     
     // Update skybox material uniforms if present
     if (data.skyboxMaterial) {
@@ -162,7 +167,6 @@ window.addEventListener('DOMContentLoaded', () => {
 
     // Modulate ambient and light parameters
     data.sunLight.intensity = BABYLON.Scalar.Lerp(0.1, 1.3, currentDayNightVal);
-    const dynamicSunDir = BABYLON.Vector3.Lerp(new BABYLON.Vector3(0, -1, 0), uLightDirValue, currentDayNightVal).normalize();
     data.sunLight.direction.copyFrom(dynamicSunDir);
 
     // --- VEHICLE DYNAMICS UPDATES ---
